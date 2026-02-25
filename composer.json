@@ -1,0 +1,6 @@
+{
+    "require": {
+        "statickidz/php-google-translate-free": "^1.2",
+        "phpoffice/phpword": "^1.3"
+    }
+}
