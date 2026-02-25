@@ -1,9 +1,10 @@
-# Ignorar dependencias de Composer
-vendor/
-
-# Ignorar archivo de conexión a la BD (Por seguridad)
+# Ignorar archivo de conexión a la BD
 conn.php
 
-# Ignorar bases de datos y archivos masivos de datos
+# Ignorar bases de datos y archivos masivos
 *.sql
 *.csv
+
+# Ignorar dependencias (si aplica)
+vendor/
+node_modules/
