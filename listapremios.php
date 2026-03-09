@@ -12,16 +12,19 @@ SELECT
     p.id,
     p.identificador,
     f.nombre_fac_min AS `FACULTAD`,
-    d.depto_nom_propio AS `DEPARTAMENTO`, p.numero_oficio,
+    d.depto_nom_propio AS `DEPARTAMENTO`, 
+    p.numero_oficio,
     GROUP_CONCAT(DISTINCT t.documento_tercero ORDER BY t.documento_tercero SEPARATOR '; ') AS `CEDULA`,
     GROUP_CONCAT(DISTINCT t.nombre_completo ORDER BY t.documento_tercero SEPARATOR '; ') AS `NOMBRES`,
     p.nombre_evento AS `EVENTO_PREMIO`,
     p.ambito AS `AMBITO`,
     p.categoria_premio AS `CATEGORIA_PREMIO`,
     p.nivel_ganado AS `NIVEL_GANADO`,
-    p.lugar_fecha AS `LUGAR_Y_FECHA`, p.estado,
+    p.lugar_fecha AS `LUGAR_Y_FECHA`, 
+    p.estado,
     GROUP_CONCAT(DISTINCT CONCAT(t.nombre_completo, ' c.c ', t.documento_tercero) ORDER BY t.documento_tercero SEPARATOR '\n') AS `DETALLES PROFESORES`,
-    p.numero_oficio AS `OFICIO`, p.puntos
+    p.numero_oficio AS `OFICIO`, 
+    p.puntos
 FROM 
     premios p 
 JOIN 
@@ -81,9 +84,11 @@ while ($row = $identificadores_result->fetch_assoc()) {
 <div class="container-fluid mt-4">
     <h1>Listado de Premios</h1>
     
-    <!-- Botones y modales -->
-        <button id="openModalpr" class="btn btn-primary">Generar XLS</button>
-    <button id="openModalCuadrospr" class="btn btn-secondary">Generar Cuadros</button><br><br>
+    <button id="openModalpr" class="btn btn-primary">Generar XLS</button>
+    <button id="openModalCuadrospr" class="btn btn-secondary">Generar Cuadros</button>
+    <button id="openModalResolucionespr" class="btn btn-success">Generar Resoluciones</button>
+    <br><br>
+
     <table id="premios" class="display table table-striped table-bordered">
         <thead>
             <tr>                
@@ -106,20 +111,26 @@ while ($row = $identificadores_result->fetch_assoc()) {
             <?php
             // Mostrar los resultados de la consulta
             while ($row = $result->fetch_assoc()) {
+                
+                // Variables definidas para que el truncamiento de facultad y detalles funcione sin errores
+                $facultad = $row['FACULTAD'];
+                $facultadTruncada = strlen($facultad) > 20 ? substr($facultad, 0, 20) . '...' : $facultad;
+                
                 echo '<tr>';
                 echo '<td>' . htmlspecialchars($row['id']) . '</td>';
                 echo '<td>' . htmlspecialchars($row['identificador']) . '</td>';
 
-                
- echo '<td class="facultad-truncate" title="' 
+                echo '<td class="facultad-truncate" title="' 
                     . htmlspecialchars($row['DEPARTAMENTO']) . ' - ' . htmlspecialchars($facultad) . '">'
                     . htmlspecialchars(substr($row['DEPARTAMENTO'], 0, 20)) . ' - ' . $facultadTruncada 
                     . '</td>';
-                                echo '<td>' . htmlspecialchars($row['numero_oficio']) . '</td>';
+                
+                echo '<td>' . htmlspecialchars($row['numero_oficio']) . '</td>';
 
                 echo '<td class="detalle-profesores" title="' . htmlspecialchars($row['DETALLES PROFESORES']) . '">'
                      . htmlspecialchars(substr($row['DETALLES PROFESORES'], 0, 20)) . (strlen($row['DETALLES PROFESORES']) > 20 ? '...' : '')
                      . '</td>';
+                
                 echo '<td>' . htmlspecialchars($row['EVENTO_PREMIO']) . '</td>';
                 echo '<td>' . htmlspecialchars($row['AMBITO']) . '</td>';
                 echo '<td>' . htmlspecialchars($row['CATEGORIA_PREMIO']) . '</td>';
@@ -129,8 +140,8 @@ while ($row = $identificadores_result->fetch_assoc()) {
                 echo '<td>' . htmlspecialchars($row['estado']) . '</td>';
 
                 echo '<td>';
-echo '<a href="editar_premios.php?id=' . $row['id'] . '" class="btn btn-warning btn-sm">Editar</a>';
-echo '<button class="btn btn-danger btn-sm" onclick="confirmDeleteWithReason(' . $row['id'] . ')">Eliminar</button>';
+                echo '<a href="editar_premios.php?id=' . $row['id'] . '" class="btn btn-warning btn-sm">Editar</a> ';
+                echo '<button class="btn btn-danger btn-sm" onclick="confirmDeleteWithReason(' . $row['id'] . ')">Eliminar</button>';
                 echo '</td>';
                 echo '</tr>';
             }
@@ -138,33 +149,32 @@ echo '<button class="btn btn-danger btn-sm" onclick="confirmDeleteWithReason(' .
         </tbody>
     </table>
 
-<!-- Modal para exportar a Excel -->
-<div id="modalpr" class="modal">
-    <div class="modal-content">
-        <span class="close">&times;</span>
-        <h2>Filtrar por Solicitud o Año</h2>
-        <form action="report_premios.php" method="GET">
-            <label for="identificador_solicitud">Identificador de Solicitud:</label>
-            <select name="identificador_solicitud" id="identificador_solicitud" class="form-control">
-                <option value="">Selecciona un identificador</option>
-                <?php
-                foreach ($identificadores as $row_ident) {
-                    echo '<option value="' . htmlspecialchars($row_ident['identificador']) . '">' . htmlspecialchars($row_ident['identificador']) . '</option>';
-                }
-                ?>
-            </select>
-            <br><br>
-            <label for="ano">Año:</label>
-            <input type="number" name="ano" id="ano" class="form-control">
-            <br><br>
-            <input type="submit" value="Generar Reporte" class="btn btn-primary">
-        </form>
+    <div id="modalpr" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Filtrar por Solicitud o Año</h2>
+            <form action="report_premios.php" method="GET">
+                <label for="identificador_solicitud">Identificador de Solicitud:</label>
+                <select name="identificador_solicitud" id="identificador_solicitud" class="form-control">
+                    <option value="">Selecciona un identificador</option>
+                    <?php
+                    foreach ($identificadores as $row_ident) {
+                        echo '<option value="' . htmlspecialchars($row_ident['identificador']) . '">' . htmlspecialchars($row_ident['identificador']) . '</option>';
+                    }
+                    ?>
+                </select>
+                <br><br>
+                <label for="ano">Año:</label>
+                <input type="number" name="ano" id="ano" class="form-control">
+                <br><br>
+                <input type="submit" value="Generar Reporte" class="btn btn-primary">
+            </form>
+        </div>
     </div>
-</div>
 
     <div id="modalCuadrospr" class="modal">
         <div class="modal-content">
-            <span class="close close-cuadros">&times;</span>
+            <span class="close">&times;</span>
             <h2>Filtrar para Generar Cuadros</h2>
             <form action="cuadros_premios.php" method="GET">
                 <label for="cuadro_identificador">Identificador de Solicitud:</label>
@@ -184,7 +194,28 @@ echo '<button class="btn btn-danger btn-sm" onclick="confirmDeleteWithReason(' .
         </div>
     </div>
 
+    <div id="modalResolucionespr" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Filtrar para Generar Resoluciones</h2>
+            <form action="resoluciones_premios.php" method="GET">
+                <label for="cuadro_identificador_premio">Identificador de Solicitud (Paquete):</label>
+                <select name="cuadro_identificador_premio" id="cuadro_identificador_premio" class="form-control" required>
+                    <option value="">Selecciona un identificador</option>
+                    <?php
+                    foreach ($identificadores as $row_ident) {
+                        echo '<option value="' . htmlspecialchars($row_ident['identificador']) . '">' . htmlspecialchars($row_ident['identificador']) . '</option>';
+                    }
+                    ?>
+                </select>
+                <br>
+                <input type="submit" value="Generar Resoluciones" class="btn btn-success">
+            </form>
+        </div>
+    </div>
+
 </div>
+
 <script>
     function confirmDeleteWithReason(id) {
         const confirmation = confirm("¿Estás seguro de que quieres eliminar esta solicitud?");
@@ -199,11 +230,17 @@ echo '<button class="btn btn-danger btn-sm" onclick="confirmDeleteWithReason(' .
         }
     }
 </script>
+
 <script>
     $(document).ready(function() {
         $('#premios').DataTable();
+        
+        // Control de los modales
         $('#openModalpr').on('click', function() { $('#modalpr').show(); });
         $('#openModalCuadrospr').on('click', function() { $('#modalCuadrospr').show(); });
+        $('#openModalResolucionespr').on('click', function() { $('#modalResolucionespr').show(); }); // Apertura Modal Resoluciones
+        
+        // Cerrar cualquier modal al hacer clic en la "X"
         $('.close').on('click', function() { $(this).closest('.modal').hide(); });
     });
 </script>

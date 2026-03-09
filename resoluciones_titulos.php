@@ -1,11 +1,12 @@
 <?php
 /**
  * Generador de Resoluciones CIARP - Títulos de Posgrados (Nacional / Exterior)
- * Versión Inteligente (Plan A): 
+ * Versión Inteligente (Plan A - Enterprise): 
  * - Estrictamente Individual (1 resolución por Docente).
- * - Consolida si el docente presenta múltiples títulos en el mismo trámite.
- * - Tablas dinámicas exactas a la plantilla oficial (N° ACTA para nacional, CONVALIDACIÓN para exterior).
- * - Gramática de Género y Nombres Propios para Departamentos/Facultades.
+ * - Tablas dinámicas (N° ACTA para nacional, CONVALIDACIÓN para exterior).
+ * - Detección automática de literal (C = Doctorado, B = Maestría).
+ * - VARIABLES DINÁMICAS (Firmas, Fechas, Resoluciones guardadas en BD).
+ * - Puntos limpios (floatval) y sin Fecha de Terminación visible.
  */
 require 'conn.php';
 require 'vendor/autoload.php';
@@ -25,10 +26,63 @@ if (!function_exists('unirLista')) {
     }
 }
 
-$identificador = isset($_GET['cuadro_identificador_solicitud']) ? trim($_GET['cuadro_identificador_solicitud']) : '';
-if (empty($identificador)) die("Identificador requerido.");
+$identificador = isset($_GET['cuadro_identificador_titulo']) ? trim($_GET['cuadro_identificador_titulo']) : '';if (empty($identificador)) die("Identificador requerido.");
 
-// --- 2. CONSULTA PLANA CORREGIDA (Se incluyó no_acta) ---
+// =========================================================================
+// RECEPCIÓN Y GUARDADO DE VARIABLES DINÁMICAS (FORMULARIO)
+// =========================================================================
+$num_resolucion = isset($_GET['num_resolucion']) && trim($_GET['num_resolucion']) !== '' ? trim($_GET['num_resolucion']) : '____';
+
+$fecha_input = isset($_GET['fecha_resolucion']) ? trim($_GET['fecha_resolucion']) : '';
+$textoFecha = "____";
+$textoMes = "________";
+$textoAno = "____";
+
+if (!empty($fecha_input)) {
+    $timestamp = strtotime($fecha_input);
+    $textoFecha = date('d', $timestamp);
+    $meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+    $textoMes = $meses[date('n', $timestamp) - 1];
+    $textoAno = date('Y', $timestamp);
+}
+
+$nombre_vicerrector = isset($_GET['nombre_vicerrector']) && trim($_GET['nombre_vicerrector']) !== '' ? trim($_GET['nombre_vicerrector']) : 'AIDA PATRICIA GONZÁLEZ NIEVA';
+$genero_vicerrector = isset($_GET['genero_vicerrector']) ? trim($_GET['genero_vicerrector']) : 'F';
+
+if ($genero_vicerrector === 'M') {
+    $cargo_vicerrector = "Vicerrector Académico";
+    $cargo_presidente = "Presidente CIARP";
+} else {
+    $cargo_vicerrector = "Vicerrectora Académica";
+    $cargo_presidente = "Presidenta CIARP";
+}
+
+$nombre_reviso = isset($_GET['nombre_reviso']) && trim($_GET['nombre_reviso']) !== '' ? trim($_GET['nombre_reviso']) : 'Marjhory Castro';
+$nombre_elaboro = isset($_GET['nombre_elaboro']) && trim($_GET['nombre_elaboro']) !== '' ? trim($_GET['nombre_elaboro']) : 'Elizete Rivera';
+
+// GUARDADO SILENCIOSO EN LA BASE DE DATOS
+if (isset($_GET['num_resolucion']) || isset($_GET['fecha_resolucion'])) {
+    $db_num_res = (isset($_GET['num_resolucion']) && trim($_GET['num_resolucion']) !== '') ? trim($_GET['num_resolucion']) : null;
+    $db_fecha_res = (isset($_GET['fecha_resolucion']) && trim($_GET['fecha_resolucion']) !== '') ? trim($_GET['fecha_resolucion']) : null;
+    
+    $sql_update = "UPDATE titulos SET 
+                    num_resolucion = ?, 
+                    fecha_resolucion = ?, 
+                    nombre_vicerrector = ?, 
+                    genero_vicerrector = ?, 
+                    nombre_reviso = ?, 
+                    nombre_elaboro = ? 
+                   WHERE identificador = ?";
+                   
+    if ($stmt_upd = $conn->prepare($sql_update)) {
+        $stmt_upd->bind_param("sssssss", $db_num_res, $db_fecha_res, $nombre_vicerrector, $genero_vicerrector, $nombre_reviso, $nombre_elaboro, $identificador);
+        $stmt_upd->execute();
+        $stmt_upd->close();
+    }
+}
+// =========================================================================
+
+// --- 2. CONSULTA PLANA ---
 $sql = "
     SELECT 
         t.id_titulo,
@@ -39,7 +93,7 @@ $sql = "
         t.institucion,
         t.fecha_terminacion,
         t.resolucion_convalidacion,
-        t.no_acta, /* <-- CAMPO AÑADIDO PARA TÍTULOS NACIONALES */
+        t.no_acta, 
         t.puntaje,
         ter.documento_tercero,
         ter.nombre_completo as profe_nombre,
@@ -80,7 +134,6 @@ while ($row = $res->fetch_assoc()) {
             'titulos' => []
         ];
     }
-    // Evitar duplicados si hay inconsistencias en la base de datos
     $id_tit = $row['id_titulo'];
     $exists = false;
     foreach ($docentes_records[$cc]['titulos'] as $existing_tit) {
@@ -101,11 +154,6 @@ $styleTable = ['borderSize' => 6, 'borderColor' => '000000', 'cellMarginTop' => 
 $phpWord->addFontStyle('FontTableBold', ['bold' => true, 'name' => 'Arial', 'size' => 9]);
 $phpWord->addFontStyle('FontTableNormal', ['name' => 'Arial', 'size' => 9]);
 $phpWord->addParagraphStyle('ParaTable', ['spaceBefore' => 0, 'spaceAfter' => 0, 'lineHeight' => 1.0]);
-
-// Textos de relleno para la firma
-$textoFecha = "____"; 
-$textoMes = "________"; 
-$textoAno = "____";
 
 // --- 5. BUCLE DE GENERACIÓN: UNA RESOLUCIÓN POR DOCENTE ---
 foreach ($docentes_records as $cc => $data) {
@@ -133,37 +181,48 @@ foreach ($docentes_records as $cc => $data) {
 
     // Nombres Propios para Departamento y Facultad
     $nomDepto = mb_convert_case(mb_strtolower(trim($docente['departamento']), 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
-    $nomDepto = str_replace(
-        [' De ', ' Del ', ' Y ', ' La ', ' Las ', ' El ', ' Los ', ' En '], 
-        [' de ', ' del ', ' y ', ' la ', ' las ', ' el ', ' los ', ' en '], 
-        $nomDepto
-    );
+    $nomDepto = str_replace([' De ', ' Del ', ' Y ', ' La ', ' Las ', ' El ', ' Los ', ' En '], [' de ', ' del ', ' y ', ' la ', ' las ', ' el ', ' los ', ' en '], $nomDepto);
     
     $nomFacultad = mb_convert_case(mb_strtolower(trim($docente['facultad']), 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
-    $nomFacultad = str_replace(
-        [' De ', ' Del ', ' Y ', ' La ', ' Las ', ' El ', ' Los ', ' En '], 
-        [' de ', ' del ', ' y ', ' la ', ' las ', ' el ', ' los ', ' en '], 
-        $nomFacultad
-    );
+    $nomFacultad = str_replace([' De ', ' Del ', ' Y ', ' La ', ' Las ', ' El ', ' Los ', ' En '], [' de ', ' del ', ' y ', ' la ', ' las ', ' el ', ' los ', ' en '], $nomFacultad);
 
-    // Formatear tipo de vinculación
     $txtVinculacion = mb_strtolower(trim($docente['vinculacion']), 'UTF-8');
 
-    // Recopilar Oficios y Sumar Puntos
+    // Procesamiento de Oficios, Puntajes y Lógica de Literales (C o B)
     $oficios = [];
     $puntajeTotal = 0;
+    $puntosArray = [];
+    $literales = [];
+
     foreach ($titulos as $tit) {
         $oficios[] = trim($tit['numero_oficio']);
-        $puntajeTotal += floatval($tit['puntaje']);
-    }
-    $textoOficios = unirLista(array_values(array_unique(array_filter($oficios))));
+        
+        $pt = floatval($tit['puntaje']); // floatval quita el .00 automáticamente
+        $puntajeTotal += $pt;
+        $puntosArray[] = $pt;
 
-    // Configuración Sección Tamaño Oficio
+        $tipo_estudio = mb_strtolower(trim($tit['tipo_estudio']), 'UTF-8');
+        if (strpos($tipo_estudio, 'doctorado') !== false) {
+            $literales[] = "c";
+        } elseif (strpos($tipo_estudio, 'maestria') !== false || strpos($tipo_estudio, 'maestría') !== false) {
+            $literales[] = "b";
+        } else {
+            $literales[] = "a"; 
+        }
+    }
+
+    $textoOficios = unirLista(array_values(array_unique(array_filter($oficios))));
+    
+    $literales = array_unique($literales); 
+    sort($literales);
+    $textoLiteral = unirLista($literales);
+    $palabraLiteral = count($literales) > 1 ? "sus literales" : "su literal";
+    $palabraLiteralP = count($literales) > 1 ? "literales" : "literal";
+
     $section = $phpWord->addSection([
         'paperSize' => 'Folio', 'marginTop' => 3000, 'marginLeft' => 1701, 'marginRight' => 1701, 'marginBottom' => 1417, 'footerHeight' => 500
     ]);
 
-    // ENCABEZADO Y PIE
     $header = $section->addHeader();
     $tableHeader = $header->addTable(); $tableHeader->addRow();
     $tableHeader->addCell(8000)->addImage('img/encabezadob.png', ['width' => 170, 'alignment' => Jc::LEFT]);
@@ -174,32 +233,30 @@ foreach ($docentes_records as $cc => $data) {
 
     // --- IMPRESIÓN DEL DOCUMENTO ---
     $section->addText("4-4.5", 'StyleNormal');
-    $section->addText("RESOLUCIÓN CIARP Nº ____ DE {$textoAno}", 'StyleBold', ['alignment' => Jc::CENTER]);
+    $section->addText("RESOLUCIÓN CIARP Nº {$num_resolucion} DE {$textoAno}", 'StyleBold', ['alignment' => Jc::CENTER]);
     $section->addText("({$textoFecha} de {$textoMes})", 'StyleNormal', ['alignment' => Jc::CENTER]);
-    $section->addTextBreak(1);
+    $section->addTextBreak(0);
 
-    // Título ajustado
     $section->addText("Por la cual se reconocen puntos a la Base – Salarial a {$txtUnProf} de la Universidad del Cauca, por concepto de Título de Posgrado.", 'StyleNormal', ['alignment' => Jc::BOTH]);
-    $section->addTextBreak(1);
+    $section->addTextBreak(0);
 
     $section->addText("EL COMITÉ INTERNO DE ASIGNACIÓN Y RECONOCIMIENTO DE PUNTAJE DE LA UNIVERSIDAD DEL CAUCA en ejercicio de la competencia conferida por el artículo 25 del Decreto 1279 de 2002 y artículo 50 del Acuerdo Superior 024 de 1993 y,", 'StyleNormal', ['alignment' => Jc::BOTH]);
-    $section->addTextBreak(1);
+    $section->addTextBreak(0);
     
     $section->addText("C O N S I D E R A N D O QUE:", 'StyleBold', ['alignment' => Jc::CENTER]);
-    $section->addTextBreak(1);
+    $section->addTextBreak(0);
 
     $section->addText("El Estatuto del profesor Universitario – Acuerdo 024 de 1993, reglamenta las funciones del Comité Interno de Asignación y Reconocimiento de Puntaje –CIARP, conforme a las disposiciones del Decreto 1279 de 2002, cuya competencia para las decisiones de reconocimiento y asignación de puntaje fue delegada por el Rector de la Universidad del Cauca a la Vicerrectora Académica mediante Resolución 698 de 2022, modificada por la Resolución 0243 de 2023.", 'StyleNormal', ['alignment' => Jc::BOTH]);
     
-    $section->addText("El Decreto 1279 de 2002, establece en el capítulo II, artículo 7 el reconocimiento y puntajes por concepto de títulos correspondientes a estudios universitarios, previendo en su numeral 2, literal c, títulos de posgrado.", 'StyleNormal', ['alignment' => Jc::BOTH]);
+    $section->addText("El Decreto 1279 de 2002, establece en el capítulo II, artículo 7 el reconocimiento y puntajes por concepto de títulos correspondientes a estudios universitarios, previendo en su numeral 2, {$palabraLiteral} {$textoLiteral}, títulos de posgrado.", 'StyleNormal', ['alignment' => Jc::BOTH]);
 
-    // Párrafo de solicitud
     $c1 = $section->addTextRun(['alignment' => Jc::BOTH]);
     $c1->addText("{$txtProfesor} de {$txtVinculacion} ", 'StyleNormal');
     $c1->addText(mb_strtoupper($docente['profe_nombre'], 'UTF-8'), 'StyleBold');
     $c1->addText(" {$txtIdentificado} con cédula de ciudadanía N° {$docente['documento_tercero']}, {$txtAdscrito} al Departamento de {$nomDepto} de la {$nomFacultad}, solicitó el reconocimiento de puntos que modifican su base salarial por el siguiente título de Posgrado:", 'StyleNormal');
-    $section->addTextBreak(1);
+    $section->addTextBreak(0);
 
-    // --- TABLAS DE DETALLES PARA CADA TÍTULO ---
+    // --- TABLAS DE DETALLES ---
     foreach ($titulos as $ti) {
         $table = $section->addTable($styleTable);
         
@@ -223,13 +280,14 @@ foreach ($docentes_records as $cc => $data) {
         $table->addCell(3000)->addText("INSTITUCIÓN", 'FontTableBold', 'ParaTable');
         $table->addCell(6000)->addText(mb_strtoupper($ti['institucion'], 'UTF-8'), 'FontTableNormal', 'ParaTable');
 
+        // FECHA DE TERMINACIÓN COMENTADA
+        /*
         $table->addRow();
         $table->addCell(3000)->addText("FECHA DE TERMINACIÓN", 'FontTableBold', 'ParaTable');
         $table->addCell(6000)->addText($ti['fecha_terminacion'], 'FontTableNormal', 'ParaTable');
+        */
 
-        // --- LÓGICA PARA NACIONAL VS EXTERIOR ---
         if (strtoupper(trim($ti['tipo'])) === 'EXTERIOR') {
-            // Exterior: Muestra Resolución y Título Convalidado
             $table->addRow();
             $table->addCell(3000)->addText("RESOLUCIÓN DE CONVALIDACIÓN", 'FontTableBold', 'ParaTable');
             $resolConvalidacion = !empty($ti['resolucion_convalidacion']) ? mb_strtoupper($ti['resolucion_convalidacion'], 'UTF-8') : "NO ESPECIFICADA";
@@ -237,10 +295,8 @@ foreach ($docentes_records as $cc => $data) {
             
             $table->addRow();
             $table->addCell(3000)->addText("TÍTULO CONVALIDADO", 'FontTableBold', 'ParaTable');
-            // Como no hay columna titulo_convalidado separada, reutilizamos titulo_obtenido
             $table->addCell(6000)->addText(mb_strtoupper($ti['titulo_obtenido'], 'UTF-8'), 'FontTableNormal', 'ParaTable');
         } else {
-            // Nacional: Muestra N° Acta
             $table->addRow();
             $table->addCell(3000)->addText("N° ACTA", 'FontTableBold', 'ParaTable');
             $noActa = !empty($ti['no_acta']) ? mb_strtoupper($ti['no_acta'], 'UTF-8') : "NO REGISTRA";
@@ -249,55 +305,67 @@ foreach ($docentes_records as $cc => $data) {
 
         $table->addRow();
         $table->addCell(3000)->addText("RECONOCER", 'FontTableBold', 'ParaTable');
-        $table->addCell(6000)->addText($ti['puntaje'] . " PUNTOS", 'FontTableBold', 'ParaTable');
+        $table->addCell(6000)->addText(floatval($ti['puntaje']) . " PUNTOS", 'FontTableBold', 'ParaTable');
         
-        $section->addTextBreak(1);
+        $section->addTextBreak(0);
     }
 
-    $section->addText("El Comité de Personal Docente de la {$nomFacultad}, remitió al CIARP mediante oficio N° {$textoOficios} de {$textoAno}, la solicitud y documentación para lo concerniente al otorgamiento de puntos, de conformidad con lo previsto en el Decreto 1279 de 2002, artículo 7, numeral 2, literal c.", 'StyleNormal', ['alignment' => Jc::BOTH]);
+    // ELIMINADO EL "de ____" AL FINAL DEL PÁRRAFO
+    $section->addText("El Comité de Personal Docente de la {$nomFacultad}, remitió al CIARP mediante oficio N° {$textoOficios}, la solicitud y documentación para lo concerniente al otorgamiento de puntos, de conformidad con lo previsto en el Decreto 1279 de 2002, artículo 7, numeral 2, {$palabraLiteral} {$textoLiteral}.", 'StyleNormal', ['alignment' => Jc::BOTH]);
     
     $section->addText("Los documentos, fueron analizados por el Comité Interno de Asignación y Reconocimiento de Puntaje en sesión del {$textoFecha} de {$textoMes} de {$textoAno}, con fundamento en el concepto del Comité de Personal Docente de su facultad, y decidió reconocer {$puntajeTotal} puntos como lo dispone la norma.", 'StyleNormal', ['alignment' => Jc::BOTH]);
 
     // --- PARTE RESOLUTIVA ---
     $section->addText("En consideración a lo expuesto,", 'StyleNormal');
     $section->addText("RESUELVE:", 'StyleBold', ['alignment' => Jc::CENTER]);
-    $section->addTextBreak(1);
+    $section->addTextBreak(0);
 
     $runR1 = $section->addTextRun(['alignment' => Jc::BOTH]);
     $runR1->addText("ARTÍCULO PRIMERO. ", 'StyleBold');
     $runR1->addText("Reconocer {$puntajeTotal} puntos a la base salarial {$txtDelProfesor} de {$txtVinculacion} ", 'StyleNormal');
     $runR1->addText(mb_strtoupper($docente['profe_nombre'], 'UTF-8'), 'StyleBold');
-    $runR1->addText(" {$txtIdentificado} con cédula de ciudadanía N° {$docente['documento_tercero']}, {$txtAdscrito} al Departamento de {$nomDepto} de la {$nomFacultad}, conforme a lo mencionado en la parte considerativa de la presente resolución y a las disposiciones del Decreto 1279 de 2002, artículo 7, numeral 2, literal c, que establece el reconocimiento de Títulos de Posgrados; cuyos efectos fiscales surtirán a partir de la expedición del presente acto administrativo.", 'StyleNormal');
-    $section->addTextBreak(1);
+    $runR1->addText(" {$txtIdentificado} con cédula de ciudadanía N° {$docente['documento_tercero']}, {$txtAdscrito} al Departamento de {$nomDepto} de la {$nomFacultad}, conforme a lo mencionado en la parte considerativa de la presente resolución y a las disposiciones del Decreto 1279 de 2002, artículo 7, numeral 2, {$palabraLiteralP} {$textoLiteral}, que establece el reconocimiento de Títulos de Posgrados; cuyos efectos fiscales surtirán a partir de la expedición del presente acto administrativo.", 'StyleNormal');
+    $section->addTextBreak(0);
 
     $correoStr = !empty($docente['email']) ? $docente['email'] : "No registrado";
+    
     $runR2 = $section->addTextRun(['alignment' => Jc::BOTH]);
     $runR2->addText("ARTÍCULO SEGUNDO. ", 'StyleBold');
-    $runR2->addText("Notificar el presente acto administrativo {$txtAlProfesor}, bajo los parámetros de la Ley 1437 de 2011, a través de medio electrónico, conforme a su autorización expresa en el formato PM-FO-4-FOR-4, al correo {$correoStr} advirtiéndole que contra ésta procede el Recurso de Reposición ante la Vicerrectoría Académica (Comité CIARP) y en subsidio el de Apelación ante el Consejo Académico de la Universidad del Cauca dentro de los diez (10) días siguientes a la fecha de la notificación.", 'StyleNormal');
-    $section->addTextBreak(1);
+    // CORRECCIÓN "días hábiles"
+    $runR2->addText("Notificar el presente acto administrativo {$txtAlProfesor}, bajo los parámetros de la Ley 1437 de 2011, a través de medio electrónico, conforme a su autorización expresa en el formato PM-FO-4-FOR-4, al correo {$correoStr} advirtiéndole que contra ésta procede el Recurso de Reposición ante la Vicerrectoría Académica (Comité CIARP) y en subsidio el de Apelación ante el Consejo Académico de la Universidad del Cauca dentro de los diez (10) días hábiles siguientes a la fecha de la notificación.", 'StyleNormal');
+    $section->addTextBreak(0);
 
     $runR3 = $section->addTextRun(['alignment' => Jc::BOTH]);
     $runR3->addText("ARTÍCULO TERCERO. ", 'StyleBold');
     $runR3->addText("Comunicar el presente acto administrativo a la División de Gestión del Talento Humano, para efectos del reconocimiento y efecto en la liquidación de la nómina.", 'StyleNormal');
-    $section->addTextBreak(1);
+    $section->addTextBreak(0);
 
+    // FIRMAS VARIABLES
+  // FIRMAS VARIABLES
     $section->addText("Se expide en Popayán, el {$textoFecha} de {$textoMes} de {$textoAno}.", 'StyleNormal');
-    $section->addTextBreak(2);
+    $section->addTextBreak(1);
 
     $section->addText("COMUNÍQUESE, NOTIFÍQUESE Y CÚMPLASE", 'StyleBold', ['alignment' => Jc::CENTER]);
-    $section->addTextBreak(3);
-
-    $section->addText("AIDA PATRICIA GONZÁLEZ NIEVA", 'StyleBold', ['alignment' => Jc::CENTER]);
-    $section->addText("Vicerrectora Académica", 'StyleNormal', ['alignment' => Jc::CENTER]);
-    $section->addText("Presidenta CIARP", 'StyleNormal', ['alignment' => Jc::CENTER]);
+    $section->addTextBreak(2);
     
-    $section->addTextBreak(1);
-    $section->addText("Revisó: Víctor D. Ruiz P.", 'StyleNormal');
-    $section->addText("Elaboró: ElizeteR", 'StyleNormal');
+    // Aquí definimos los estilos sin espaciado
+    $styleFirmaCenter = ['alignment' => Jc::CENTER, 'spaceAfter' => 0];
+    $styleFirmaLeft = ['spaceAfter' => 0];
+    $fontFirmaPequena = ['name' => 'Arial', 'size' => 8, 'italic' => true]; 
+    
+    // ¡AQUÍ ESTÁ EL CAMBIO! Aplicamos la variable $styleFirmaCenter a las 3 líneas
+    $section->addText(mb_strtoupper($nombre_vicerrector, 'UTF-8'), 'StyleBold', $styleFirmaCenter);
+    $section->addText($cargo_vicerrector, 'StyleNormal', $styleFirmaCenter);
+    $section->addText($cargo_presidente, 'StyleNormal', $styleFirmaCenter);
+    
+    $section->addTextBreak(1); // Espacio entre Vice y Elaboró
+
+    // Imprimir Revisó y Elaboró (alineadas a la izquierda, pegadas, tamaño 8 y cursiva)
+    $section->addText("Revisó: " . $nombre_reviso, $fontFirmaPequena, $styleFirmaLeft);
+    $section->addText("Elaboró: " . $nombre_elaboro, $fontFirmaPequena, $styleFirmaLeft);
 
     $section->addPageBreak();
 }
-
 // --- 6. DESCARGA SEGURA ---
 if (ob_get_contents()) ob_end_clean();
 $nombreFile = "Resolucion_Titulos_" . preg_replace('/[^A-Za-z0-9]/', '_', $identificador) . ".docx";

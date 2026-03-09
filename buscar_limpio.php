@@ -1439,9 +1439,8 @@ $identificador_base = date('Y_m');
      <!-- Campo oculto para el ID del artículo -->
       <input type="hidden" name="fk_id_articulo" value="<?php echo $id_articulo_encontrado; ?>">
 
-<div class="row mb-3 align-items-center">
-  <!-- Identificador -->
-  <div class="col-md-3">
+<div class="row mb-3 align-items-end">
+  <div class="col-md-4">
     <label for="identificador_base" class="form-label fw-bold">Identificador:</label>
     <div class="input-group">
       <input type="text" class="form-control" id="identificador_base" name="identificador_base" 
@@ -1456,41 +1455,60 @@ $identificador_base = date('Y_m');
     </div>
   </div>
 
-  <!-- Número de Profesores Solicitantes -->
-  <div class="col-md-3">
+  <div class="col-md-4">
     <label for="numero_profesores" class="form-label fw-bold"># Profesores solicitantes:</label>
     <input type="number" id="numero_profesores" name="numero_profesores" class="form-control" required min="1">
   </div>
 
-  <!-- Número de Oficio -->
-  <div class="col-md-3">
+  <div class="col-md-4">
     <label for="inputTrdFac" class="form-label fw-bold">Número de oficio:</label>
     <input type="text" id="inputTrdFac" name="inputTrdFac" class="form-control" required>
   </div>
+</div>
 
-  <!-- Estados -->
-  <div class="col-md-3">
-    <label class="form-label fw-bold">Estados:</label>
-    <div class="d-flex flex-wrap" id="estados">
-      <label class="me-3">
-        <input type="checkbox" name="est_scimago" value="1" <?php echo ($est_scimago === 1) ? 'checked' : ''; ?>> SCIMAGO
-      </label>
-      <label class="me-3">
-        <input type="checkbox" name="est_doaj" value="1" <?php echo ($est_doaj === 1) ? 'checked' : ''; ?>> DOAJ
-      </label>
-      <label class="me-3">
-        <input type="checkbox" name="est_scopus" value="1" <?php echo ($est_scopus === 1) ? 'checked' : ''; ?>> SCOPUS
-      </label>
-      <label class="me-3">
-        <input type="checkbox" name="est_miar" value="1" <?php echo ($est_miar === 1) ? 'checked' : ''; ?>> MIAR
-      </label>
-     <label class="me-3">
-        <input type="checkbox" name="est_core" value="1" <?php echo ($est_core === 1) ? 'checked' : ''; ?>> CORE
-      </label>
+<div class="row mb-4">
+  <div class="col-md-12">
+    <label class="form-label fw-bold mb-2">Estados de la Revista y Alertas:</label>
+    
+    <div class="d-flex flex-wrap align-items-center rounded p-2" style="background-color: #f8f9fa; border: 1px solid #dee2e6;">
+      
+      <div class="form-check form-check-inline me-4">
+        <input class="form-check-input" type="checkbox" name="est_scimago" id="est_scimago" value="1" <?php echo ($est_scimago === 1) ? 'checked' : ''; ?>>
+        <label class="form-check-label" for="est_scimago">SCIMAGO</label>
+      </div>
+      
+      <div class="form-check form-check-inline me-4">
+        <input class="form-check-input" type="checkbox" name="est_doaj" id="est_doaj" value="1" <?php echo ($est_doaj === 1) ? 'checked' : ''; ?>>
+        <label class="form-check-label" for="est_doaj">DOAJ</label>
+      </div>
+      
+      <div class="form-check form-check-inline me-4">
+        <input class="form-check-input" type="checkbox" name="est_scopus" id="est_scopus" value="1" <?php echo ($est_scopus === 1) ? 'checked' : ''; ?>>
+        <label class="form-check-label" for="est_scopus">SCOPUS</label>
+      </div>
+      
+      <div class="form-check form-check-inline me-4">
+        <input class="form-check-input" type="checkbox" name="est_miar" id="est_miar" value="1" <?php echo ($est_miar === 1) ? 'checked' : ''; ?>>
+        <label class="form-check-label" for="est_miar">MIAR</label>
+      </div>
+      
+      <div class="form-check form-check-inline me-4">
+        <input class="form-check-input" type="checkbox" name="est_core" id="est_core" value="1" <?php echo ($est_core === 1) ? 'checked' : ''; ?>>
+        <label class="form-check-label" for="est_core">CORE</label>
+      </div>
+
+      <div class="vr mx-2 d-none d-md-block" style="height: 24px; background-color: #dee2e6;"></div>
+
+      <div class="form-check form-check-inline ms-md-3 mt-2 mt-md-0">
+        <input class="form-check-input" type="checkbox" name="mdpi_pred" id="mdpi_pred" value="1">
+        <label class="form-check-label text-danger fw-bold" for="mdpi_pred">
+            ⚠️ Revista MDPI o Predadora
+        </label>
+      </div>
+
     </div>
   </div>
 </div>
-
 
 <!-- Contenedor para documentos -->
 <div id="contenedor_documentos" class="mb-3">
