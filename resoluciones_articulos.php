@@ -1,11 +1,12 @@
 <?php
 /**
  * Generador de Resoluciones CIARP - Artículos Especializados
- * Versión Inteligente (Plan A): 
- * - Agrupación estricta por TIPO DE ARTÍCULO.
+ * Versión Inteligente (Plan A - Enterprise): 
+ * - AGRUPACIÓN POR FIRMA COLECTIVA: Agrupa estrictamente por la combinación exacta de autores.
  * - Desglose de múltiples puntajes.
  * - Oculta MDPI si no está marcada.
- * - VARIABLES DINÁMICAS: Número, Fecha, Nombres y Cargos de firmas personalizables.
+ * - VARIABLES DINÁMICAS (NÚMEROS CONSECUTIVOS AUTOMÁTICOS).
+ * - "a C/U" dinámico en la tabla si hay múltiples docentes.
  */
 require 'conn.php';
 require 'vendor/autoload.php';
@@ -14,7 +15,6 @@ use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\SimpleType\Jc;
 
-// --- 1. FUNCIÓN DE REDACCIÓN NATURAL ---
 if (!function_exists('unirLista')) {
     function unirLista($items) {
         if (count($items) == 0) return "";
@@ -44,16 +44,31 @@ $identificador = isset($_GET['cuadro_identificador_solicitud']) ? trim($_GET['cu
 if (empty($identificador)) die("Identificador requerido.");
 
 // =========================================================================
-// RECEPCIÓN DE NUEVAS VARIABLES DINÁMICAS (FORMULARIO)
+// 1. CAPTURA DE VARIABLES BASE DEL MODAL
 // =========================================================================
-$num_resolucion = isset($_GET['num_resolucion']) && trim($_GET['num_resolucion']) !== '' ? trim($_GET['num_resolucion']) : '____';
+
+$base_num = null;
+$len_num = 3; 
+if (isset($_GET['num_resolucion']) && is_numeric(trim($_GET['num_resolucion']))) {
+    $str_num = trim($_GET['num_resolucion']);
+    $base_num = intval($str_num);
+    $len_num = strlen($str_num);
+    
+    // LIMPIEZA DE LOTE: Borramos los números anteriores de este paquete para empezar en limpio
+    $stmt_clean = $conn->prepare("UPDATE solicitud SET num_resolucion = NULL WHERE identificador_solicitud = ?");
+    $stmt_clean->bind_param("s", $identificador);
+    $stmt_clean->execute();
+    $stmt_clean->close();
+}
 
 $fecha_input = isset($_GET['fecha_resolucion']) ? trim($_GET['fecha_resolucion']) : '';
 $textoFecha = "____";
 $textoMes = "________";
 $textoAno = "____";
+$db_fecha_res = null;
 
 if (!empty($fecha_input)) {
+    $db_fecha_res = $fecha_input; 
     $timestamp = strtotime($fecha_input);
     $textoFecha = date('d', $timestamp);
     $meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -74,40 +89,6 @@ if ($genero_vicerrector === 'M') {
 
 $nombre_reviso = isset($_GET['nombre_reviso']) && trim($_GET['nombre_reviso']) !== '' ? trim($_GET['nombre_reviso']) : 'Marjhory Castro';
 $nombre_elaboro = isset($_GET['nombre_elaboro']) && trim($_GET['nombre_elaboro']) !== '' ? trim($_GET['nombre_elaboro']) : 'Elizete Rivera';
-
-// =========================================================================
-// NUEVO: GUARDAR DATOS DE LA RESOLUCIÓN EN LA BASE DE DATOS
-// =========================================================================
-if (isset($_GET['num_resolucion']) || isset($_GET['fecha_resolucion'])) {
-    
-    $db_num_res = (isset($_GET['num_resolucion']) && trim($_GET['num_resolucion']) !== '') ? trim($_GET['num_resolucion']) : null;
-    $db_fecha_res = (isset($_GET['fecha_resolucion']) && trim($_GET['fecha_resolucion']) !== '') ? trim($_GET['fecha_resolucion']) : null;
-    
-    $sql_update = "UPDATE solicitud SET 
-                    num_resolucion = ?, 
-                    fecha_resolucion = ?, 
-                    nombre_vicerrector = ?, 
-                    genero_vicerrector = ?, 
-                    nombre_reviso = ?, 
-                    nombre_elaboro = ? 
-                   WHERE identificador_solicitud = ?";
-                   
-    if ($stmt_upd = $conn->prepare($sql_update)) {
-        $stmt_upd->bind_param(
-            "sssssss", 
-            $db_num_res, 
-            $db_fecha_res, 
-            $nombre_vicerrector, 
-            $genero_vicerrector, 
-            $nombre_reviso, 
-            $nombre_elaboro, 
-            $identificador
-        );
-        $stmt_upd->execute();
-        $stmt_upd->close();
-    }
-}
-// =========================================================================
 
 // --- 2. CONSULTA PLANA ---
 $sql = "
@@ -138,50 +119,63 @@ $sql = "
     JOIN deparmanentos d ON t.fk_depto = d.PK_DEPTO
     JOIN facultad f ON d.FK_FAC = f.PK_FAC
     WHERE s.identificador_solicitud = '" . $conn->real_escape_string($identificador) . "'
-    AND (s.estado_solicitud IS NULL OR s.estado_solicitud <> 'an')
-    ORDER BY f.nombre_fac_min, d.depto_nom_propio, t.nombre_completo
+    AND (s.estado_solicitud IS NULL OR LOWER(TRIM(s.estado_solicitud)) <> 'an')
+    ORDER BY s.id_solicitud_articulo, t.nombre_completo
 ";
 
 $res = $conn->query($sql);
 if ($res->num_rows === 0) die("No se encontraron registros activos para el identificador: " . htmlspecialchars($identificador));
 
-// --- 3. MOTOR DE CLASIFICACIÓN ---
-$prof_records = [];
-$seen_articles = [];
+// --- 3. MOTOR DE CLASIFICACIÓN (NUEVA REGLA: POR FIRMA COLECTIVA EXACTA) ---
+$article_authors = [];
+$article_data = [];
 
 while ($row = $res->fetch_assoc()) {
-    $cc = $row['documento_tercero'];
     $id_art = $row['id_solicitud_articulo'];
-    $cat = getCategoriaArticulo($row['tipo_articulo']); 
     
-    if (!isset($prof_records[$cc][$cat])) {
-        $prof_records[$cc][$cat] = [];
-        $seen_articles[$cc][$cat] = [];
+    // Si es la primera vez que vemos este artículo, guardamos sus datos
+    if (!isset($article_data[$id_art])) {
+        $article_data[$id_art] = $row; 
+        $article_authors[$id_art] = [];
     }
-    if (!in_array($id_art, $seen_articles[$cc][$cat])) {
-        $prof_records[$cc][$cat][] = $row;
-        $seen_articles[$cc][$cat][] = $id_art;
-    }
+    
+    // Guardamos a cada profesor involucrado en este artículo
+    $article_authors[$id_art][] = [
+        'documento_tercero' => $row['documento_tercero'],
+        'profe_nombre' => $row['profe_nombre'],
+        'sexo' => $row['sexo'],
+        'email' => $row['email'],
+        'departamento' => $row['departamento'],
+        'facultad' => $row['facultad']
+    ];
 }
 
-$prof_multiples = [];
-$articulos_grupales = [];
+$resoluciones_grupos = [];
 
-foreach ($prof_records as $cc => $categorias) {
-    foreach ($categorias as $cat => $arts) {
-        if (count($arts) > 1) {
-            $prof_multiples[$cc . '_' . $cat] = $arts;
-        } else {
-            $row = $arts[0];
-            $id_art = $row['id_solicitud_articulo'];
-            $fac = $row['facultad'];
-            
-            if (!isset($articulos_grupales[$id_art][$fac])) {
-                $articulos_grupales[$id_art][$fac] = [];
-            }
-            $articulos_grupales[$id_art][$fac][] = $row;
-        }
+// Ahora agrupamos los artículos que tengan EXACTAMENTE los mismos autores, categoría y facultad
+foreach ($article_data as $id_art => $art_info) {
+    $autores = $article_authors[$id_art];
+    
+    // Creamos una "Huella Digital" de los autores (Ej: 10292635_98396856)
+    $ids = array_column($autores, 'documento_tercero');
+    sort($ids); // Ordenamos para asegurar consistencia
+    $author_key = implode('_', $ids);
+    
+    $cat = getCategoriaArticulo($art_info['tipo_articulo']);
+    $facultad = $autores[0]['facultad']; 
+    
+    // Llave maestra del grupo
+    $grupo_key = $cat . '|' . $facultad . '|' . $author_key;
+    
+    if (!isset($resoluciones_grupos[$grupo_key])) {
+        $resoluciones_grupos[$grupo_key] = [
+            'docentes' => $autores,
+            'articulos' => [],
+            'facultad' => $facultad
+        ];
     }
+    
+    $resoluciones_grupos[$grupo_key]['articulos'][] = $art_info;
 }
 
 // --- 4. CONFIGURACIÓN BASE DE WORD ---
@@ -193,48 +187,43 @@ $phpWord->addFontStyle('FontTableBold', ['bold' => true, 'name' => 'Arial', 'siz
 $phpWord->addFontStyle('FontTableNormal', ['name' => 'Arial', 'size' => 9]);
 $phpWord->addParagraphStyle('ParaTable', ['spaceBefore' => 0, 'spaceAfter' => 0, 'lineHeight' => 1.0]);
 
-// Convertimos variables a string para pasarlas a la función
 $vars = [
-    'num_res' => $num_resolucion,
-    'dia' => $textoFecha,
-    'mes' => $textoMes,
-    'ano' => $textoAno,
-    'nom_vicerrector' => $nombre_vicerrector,
-    'car_vicerrector' => $cargo_vicerrector,
-    'car_presidente' => $cargo_presidente,
-    'reviso' => $nombre_reviso,
-    'elaboro' => $nombre_elaboro
+    'dia' => $textoFecha, 'mes' => $textoMes, 'ano' => $textoAno,
+    'nom_vicerrector' => $nombre_vicerrector, 'car_vicerrector' => $cargo_vicerrector,
+    'car_presidente' => $cargo_presidente, 'reviso' => $nombre_reviso, 'elaboro' => $nombre_elaboro
 ];
 
-// --- 5. BUCLE DE GENERACIÓN ---
-foreach ($prof_multiples as $key => $arts) {
-    $cc = explode('_', $key)[0];
-    $docentes_list = [[
-        'documento_tercero' => $cc,
-        'profe_nombre' => $arts[0]['profe_nombre'],
-        'sexo' => $arts[0]['sexo'],
-        'email' => $arts[0]['email'],
-        'departamento' => $arts[0]['departamento']
-    ]];
-    generarResolucion($phpWord, $docentes_list, $arts, $arts[0]['facultad'], $styleTable, $vars);
+// PREPARACIÓN SQL LIMPIA (7 Parámetros = ssssssi)
+$sql_update = "UPDATE solicitud SET num_resolucion = ?, fecha_resolucion = ?, nombre_vicerrector = ?, genero_vicerrector = ?, nombre_reviso = ?, nombre_elaboro = ? WHERE id_solicitud_articulo = ?";
+$stmt_upd = $conn->prepare($sql_update);
+
+// --- 5. BUCLE DE GENERACIÓN Y ACTUALIZACIÓN CONSECUTIVA ---
+foreach ($resoluciones_grupos as $grupo_key => $grupo) {
+    
+    // Calcular el consecutivo actual
+    $assigned_num_str = '____';
+    $param_num = null;
+    if ($base_num !== null) {
+        $assigned_num_str = str_pad($base_num, $len_num, "0", STR_PAD_LEFT);
+        $param_num = $assigned_num_str;
+        $base_num++; 
+    }
+
+    // Actualizamos en BD solo los artículos de este grupo exacto
+    foreach ($grupo['articulos'] as $a) {
+        $id_update = $a['id_solicitud_articulo'];
+        // 6 variables string, 1 variable int = "ssssssi"
+        $stmt_upd->bind_param("ssssssi", $param_num, $db_fecha_res, $nombre_vicerrector, $genero_vicerrector, $nombre_reviso, $nombre_elaboro, $id_update);
+        $stmt_upd->execute();
+    }
+
+    $vars['num_res'] = $assigned_num_str;
+
+    // Pasamos el arreglo de docentes únicos y el arreglo de sus artículos a la función
+    generarResolucion($phpWord, $grupo['docentes'], $grupo['articulos'], $grupo['facultad'], $styleTable, $vars);
 }
 
-foreach ($articulos_grupales as $id_art => $facultades) {
-    foreach ($facultades as $fac => $profesores) {
-        $docentes_list = [];
-        foreach ($profesores as $p) {
-            $docentes_list[] = [
-                'documento_tercero' => $p['documento_tercero'],
-                'profe_nombre' => $p['profe_nombre'],
-                'sexo' => $p['sexo'],
-                'email' => $p['email'],
-                'departamento' => $p['departamento']
-            ];
-        }
-        $articulos_list = [$profesores[0]]; 
-        generarResolucion($phpWord, $docentes_list, $articulos_list, $fac, $styleTable, $vars);
-    }
-}
+if ($stmt_upd) $stmt_upd->close();
 
 // --- 6. FUNCIÓN DE RENDERIZADO ---
 function generarResolucion($phpWord, $docentes_list, $articulos_list, $facultad, $styleTable, $vars) {
@@ -353,16 +342,16 @@ function generarResolucion($phpWord, $docentes_list, $articulos_list, $facultad,
     $section->addText("4-4.5", 'StyleNormal');
     $section->addText("RESOLUCIÓN CIARP Nº {$vars['num_res']} DE {$vars['ano']}", 'StyleBold', ['alignment' => Jc::CENTER]);
     $section->addText("({$vars['dia']} de {$vars['mes']})", 'StyleNormal', ['alignment' => Jc::CENTER]);
-    $section->addTextBreak(1); // RESTAURADO A 1
+    $section->addTextBreak(1); 
 
     $section->addText("Por la cual se reconocen puntos a la Base – Salarial a {$textoUnProfesor} de la Universidad del Cauca, por concepto de productividad académica {$textoConcepto}.", 'StyleNormal', ['alignment' => Jc::BOTH]);
-    $section->addTextBreak(1); // RESTAURADO A 1
+    $section->addTextBreak(0); 
 
     $section->addText("EL COMITÉ INTERNO DE ASIGNACIÓN Y RECONOCIMIENTO DE PUNTAJE DE LA UNIVERSIDAD DEL CAUCA en ejercicio de la competencia conferida por el artículo 25 del Decreto 1279 de 2002 y artículo 50 del Acuerdo Superior 024 de 1993 y,", 'StyleNormal', ['alignment' => Jc::BOTH]);
-    $section->addTextBreak(1); // RESTAURADO A 1
+    $section->addTextBreak(1); 
     
     $section->addText("C O N S I D E R A N D O QUE:", 'StyleBold', ['alignment' => Jc::CENTER]);
-    $section->addTextBreak(1); // RESTAURADO A 1
+    $section->addTextBreak(1); 
 
     $section->addText("El Estatuto del Profesor Universitario – Acuerdo 024 de 1993, reglamenta los integrantes, funciones y criterios de asignación y reconocimiento de puntos del Comité Interno de Asignación y Reconocimiento de Puntaje –CIARP, conforme a las disposiciones del Decreto 1279 de 2002, cuya competencia para las decisiones de reconocimiento y asignación de puntaje fue delegada por el Rector de la Universidad del Cauca a la Vicerrectoría Académica mediante Resolución 698 de 2022, modificada por la Resolución 0243 de 2023.", 'StyleNormal', ['alignment' => Jc::BOTH]);
     
@@ -388,7 +377,7 @@ function generarResolucion($phpWord, $docentes_list, $articulos_list, $facultad,
     foreach ($docentes_list as $d) {
         $section->addText(mb_strtoupper($d['profe_nombre'], 'UTF-8') . " C.C " . $d['documento_tercero'] . " " . $strPuntos, 'StyleNormal');
     }
-    $section->addTextBreak(1); // RESTAURADO A 1
+    $section->addTextBreak(0); 
 
     // TABLAS (Separadas correctamente)
     foreach ($articulos_list as $art) {
@@ -440,9 +429,14 @@ function generarResolucion($phpWord, $docentes_list, $articulos_list, $facultad,
 
         $table->addRow();
         $table->addCell(3000)->addText("RECONOCER", 'FontTableBold', 'ParaTable');
-        $table->addCell(6000)->addText($art['puntaje'] . " PUNTOS", 'FontTableBold', 'ParaTable');
+        
+        // --- AQUÍ ESTÁ LA NUEVA LÓGICA PARA "a C/U" ---
+        $textoPuntosTabla = $art['puntaje'] . " PUNTOS";
+        if (count($docentes_list) > 1) {
+            $textoPuntosTabla .= " a C/U";
+        }
+        $table->addCell(6000)->addText($textoPuntosTabla, 'FontTableBold', 'ParaTable');
 
-        // ESTE ERA EL PROBLEMA: ESTABA EN 0, AHORA ES 1 PARA SEPARAR TABLAS
         $section->addTextBreak(1); 
     }
 
@@ -465,7 +459,7 @@ function generarResolucion($phpWord, $docentes_list, $articulos_list, $facultad,
     foreach ($docentes_list as $d) {
         $section->addText(mb_strtoupper($d['profe_nombre'], 'UTF-8') . " C.C " . $d['documento_tercero'] . " " . $strPuntos, 'StyleNormal');
     }
-    $section->addTextBreak(1); // RESTAURADO A 1
+    $section->addTextBreak(0); 
 
     $runR2 = $section->addTextRun(['alignment' => Jc::BOTH]);
     $runR2->addText("ARTÍCULO " . $numStr[$n++] . ". ", 'StyleBold');
@@ -484,28 +478,25 @@ function generarResolucion($phpWord, $docentes_list, $articulos_list, $facultad,
     $runR_Com = $section->addTextRun(['alignment' => Jc::BOTH]);
     $runR_Com->addText("ARTÍCULO " . $numStr[$n++] . ". ", 'StyleBold');
     $runR_Com->addText("Comunicar el presente acto administrativo a la División de Gestión del Talento Humano, para efectos del reconocimiento y efecto en la liquidación de la nómina.", 'StyleNormal');
-    $section->addTextBreak(1); // RESTAURADO A 1
+    $section->addTextBreak(0); 
 
-    // FECHA Y FIRMAS DINÁMICAS (Con los espacios correctos)
+    // FECHA Y FIRMAS DINÁMICAS
     $section->addText("Se expide en Popayán, el {$vars['dia']} de {$vars['mes']} de {$vars['ano']}.", 'StyleNormal');
     $section->addTextBreak(1);
 
     $section->addText("COMUNÍQUESE, NOTIFÍQUESE Y CÚMPLASE", 'StyleBold', ['alignment' => Jc::CENTER]);
     $section->addTextBreak(2);
 
-    // --- ESTILOS DE PÁRRAFO SIN ESPACIADO Y FUENTE PEQUEÑA CURSIVA ---
     $styleFirmaCenter = ['alignment' => Jc::CENTER, 'spaceAfter' => 0];
     $styleFirmaLeft = ['spaceAfter' => 0];
     $fontFirmaPequena = ['name' => 'Arial', 'size' => 8, 'italic' => true];
 
-    // Imprimir firmas del Vicerrector/a (centradas y pegadas)
     $section->addText(mb_strtoupper($vars['nom_vicerrector'], 'UTF-8'), 'StyleBold', $styleFirmaCenter);
     $section->addText($vars['car_vicerrector'], 'StyleNormal', $styleFirmaCenter);
     $section->addText($vars['car_presidente'], 'StyleNormal', $styleFirmaCenter);
     
     $section->addTextBreak(1);
     
-    // Imprimir Revisó y Elaboró (alineadas a la izquierda, pegadas, tamaño 8 y cursiva)
     $section->addText("Revisó: " . $vars['reviso'], $fontFirmaPequena, $styleFirmaLeft);
     $section->addText("Elaboró: " . $vars['elaboro'], $fontFirmaPequena, $styleFirmaLeft);
 

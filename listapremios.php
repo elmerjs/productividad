@@ -55,11 +55,20 @@ $sql .= " ORDER BY p.id DESC";
 $result = $conn->query($sql);
 
 // Obtener los identificadores de solicitud para los filtros
-$identificadores_result = $conn->query("SELECT DISTINCT identificador FROM premios");
+$identificadores_result = $conn->query("SELECT DISTINCT identificador FROM premios ORDER BY identificador DESC");
 $identificadores = [];
+$unique_years = [];
+
 while ($row = $identificadores_result->fetch_assoc()) {
     $identificadores[] = $row;
+    
+    // Extraer los primeros 4 dígitos para tener la lista de años
+    $year = substr($row['identificador'], 0, 4);
+    if (!empty($year) && is_numeric($year) && !in_array($year, $unique_years)) {
+        $unique_years[] = $year;
+    }
 }
+rsort($unique_years); // Ordenar años de mayor a menor
 ?>
 
 <!DOCTYPE html>
@@ -73,10 +82,11 @@ while ($row = $identificadores_result->fetch_assoc()) {
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.12.1/css/jquery.dataTables.min.css">
     <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
     <style>
-        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0, 0, 0, 0.4); padding-top: 60px; }
-        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 60%; max-width: 600px; }
+        .modal { display: none; position: fixed; z-index: 1050; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0, 0, 0, 0.5); padding-top: 60px; }
+        .modal-content { background-color: #fefefe; margin: 2% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 600px; border-radius: 8px;}
         .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; }
         .close:hover, .close:focus { color: black; text-decoration: none; cursor: pointer; }
+        .limited-text { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     </style>
 </head>
 <body>
@@ -84,10 +94,11 @@ while ($row = $identificadores_result->fetch_assoc()) {
 <div class="container-fluid mt-4">
     <h1>Listado de Premios</h1>
     
-    <button id="openModalpr" class="btn btn-primary">Generar XLS</button>
-    <button id="openModalCuadrospr" class="btn btn-secondary">Generar Cuadros</button>
-    <button id="openModalResolucionespr" class="btn btn-success">Generar Resoluciones</button>
-    <br><br>
+    <div class="mb-3">
+        <button id="openModalpr" class="btn btn-primary">Generar XLS</button>
+        <button id="openModalCuadrospr" class="btn btn-secondary">Generar Cuadros</button>
+        <button id="openModalResolucionespr" class="btn btn-info text-white">Generar Resoluciones</button>
+    </div>
 
     <table id="premios" class="display table table-striped table-bordered">
         <thead>
@@ -109,10 +120,7 @@ while ($row = $identificadores_result->fetch_assoc()) {
         </thead>
         <tbody>
             <?php
-            // Mostrar los resultados de la consulta
             while ($row = $result->fetch_assoc()) {
-                
-                // Variables definidas para que el truncamiento de facultad y detalles funcione sin errores
                 $facultad = $row['FACULTAD'];
                 $facultadTruncada = strlen($facultad) > 20 ? substr($facultad, 0, 20) . '...' : $facultad;
                 
@@ -127,7 +135,7 @@ while ($row = $identificadores_result->fetch_assoc()) {
                 
                 echo '<td>' . htmlspecialchars($row['numero_oficio']) . '</td>';
 
-                echo '<td class="detalle-profesores" title="' . htmlspecialchars($row['DETALLES PROFESORES']) . '">'
+                echo '<td class="limited-text" title="' . htmlspecialchars($row['DETALLES PROFESORES']) . '">'
                      . htmlspecialchars(substr($row['DETALLES PROFESORES'], 0, 20)) . (strlen($row['DETALLES PROFESORES']) > 20 ? '...' : '')
                      . '</td>';
                 
@@ -186,30 +194,85 @@ while ($row = $identificadores_result->fetch_assoc()) {
                     }
                     ?>
                 </select>
+                <br>
                 <label for="cuadro_ano">Año:</label>
                 <input type="number" name="cuadro_ano" id="cuadro_ano" class="form-control">
-                <br>
+                <br><br>
                 <input type="submit" value="Generar Cuadro" class="btn btn-secondary">
             </form>
         </div>
     </div>
 
     <div id="modalResolucionespr" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 700px;">
             <span class="close">&times;</span>
-            <h2>Filtrar para Generar Resoluciones</h2>
+            <h2 class="mb-4">Generar Resoluciones de Premios (Word)</h2>
             <form action="resoluciones_premios.php" method="GET">
-                <label for="cuadro_identificador_premio">Identificador de Solicitud (Paquete):</label>
-                <select name="cuadro_identificador_premio" id="cuadro_identificador_premio" class="form-control" required>
-                    <option value="">Selecciona un identificador</option>
-                    <?php
-                    foreach ($identificadores as $row_ident) {
-                        echo '<option value="' . htmlspecialchars($row_ident['identificador']) . '">' . htmlspecialchars($row_ident['identificador']) . '</option>';
-                    }
-                    ?>
-                </select>
-                <br>
-                <input type="submit" value="Generar Resoluciones" class="btn btn-success">
+                
+                <div class="row bg-light p-3 mb-3 border rounded">
+                    <div class="col-md-6 mb-2">
+                        <label for="filtro_ano_premios" class="fw-bold">Año del Paquete:</label>
+                        <select id="filtro_ano_premios" class="form-control">
+                            <option value="todos">Todos los años</option>
+                            <?php
+                            foreach ($unique_years as $ano_val) {
+                                echo '<option value="' . htmlspecialchars($ano_val) . '">' . htmlspecialchars($ano_val) . '</option>';
+                            }
+                            ?>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label for="cuadro_identificador_premio" class="fw-bold">Identificador (Paquete):</label>
+                        <select name="cuadro_identificador_premio" id="cuadro_identificador_premio" class="form-control" required>
+                            <option value="">Selecciona un identificador</option>
+                            <?php
+                            foreach ($identificadores as $row_ident) {
+                                echo '<option value="' . htmlspecialchars($row_ident['identificador']) . '" data-ano="' . substr($row_ident['identificador'], 0, 4) . '">'
+                                    . htmlspecialchars($row_ident['identificador']) . '</option>';
+                            }
+                            ?>
+                        </select>
+                    </div>
+                </div>
+
+                <h5 class="mb-3 text-primary">Datos de la Resolución (Opcionales)</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="num_resolucion">Número de resolución (Inicial):</label>
+                        <input type="text" name="num_resolucion" id="num_resolucion" class="form-control" placeholder="Ej: 045">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="fecha_resolucion">Fecha de la resolución:</label>
+                        <input type="date" name="fecha_resolucion" id="fecha_resolucion" class="form-control">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label for="nombre_vicerrector">Firma (Vicerrector/a):</label>
+                        <input type="text" name="nombre_vicerrector" id="nombre_vicerrector" class="form-control" value="AIDA PATRICIA GONZÁLEZ NIEVA" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="genero_vicerrector">Género:</label>
+                        <select name="genero_vicerrector" id="genero_vicerrector" class="form-control" required>
+                            <option value="F">Femenino</option>
+                            <option value="M">Masculino</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <label for="nombre_reviso">Revisó:</label>
+                        <input type="text" name="nombre_reviso" id="nombre_reviso" class="form-control" value="Marjhory Castro" required>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <label for="nombre_elaboro">Elaboró:</label>
+                        <input type="text" name="nombre_elaboro" id="nombre_elaboro" class="form-control" value="Elizete Rivera" required>
+                    </div>
+                </div>
+
+                <input type="submit" value="Generar Resoluciones Word" class="btn btn-info text-white w-100 fs-5">
             </form>
         </div>
     </div>
@@ -222,7 +285,6 @@ while ($row = $identificadores_result->fetch_assoc()) {
         if (confirmation) {
             const motivo = prompt("Por favor, indique el motivo de la anulación:");
             if (motivo && motivo.trim() !== "") {
-                // Redirigir con el ID y el motivo como parámetros
                 window.location.href = 'eliminar_solicitud_premio.php?id_solicitud=' + id + '&motivo=' + encodeURIComponent(motivo);
             } else {
                 alert("El motivo de la anulación es obligatorio.");
@@ -233,15 +295,48 @@ while ($row = $identificadores_result->fetch_assoc()) {
 
 <script>
     $(document).ready(function() {
-        $('#premios').DataTable();
+        $('#premios').DataTable({
+            responsive: true,
+            language: {
+                url: 'https://cdn.datatables.net/plug-ins/1.12.1/i18n/Spanish.json'
+            }
+        });
         
         // Control de los modales
         $('#openModalpr').on('click', function() { $('#modalpr').show(); });
         $('#openModalCuadrospr').on('click', function() { $('#modalCuadrospr').show(); });
-        $('#openModalResolucionespr').on('click', function() { $('#modalResolucionespr').show(); }); // Apertura Modal Resoluciones
+        $('#openModalResolucionespr').on('click', function() { $('#modalResolucionespr').show(); }); 
         
         // Cerrar cualquier modal al hacer clic en la "X"
         $('.close').on('click', function() { $(this).closest('.modal').hide(); });
+        
+        // Cerrar si se hace clic fuera de la caja del modal
+        $(window).click(function(event) {
+            if ($(event.target).is(".modal")) {
+                $(".modal").hide();
+            }
+        });
+
+        // Evento de filtrado por año para el modal de Resoluciones
+        $('#filtro_ano_premios').on('change', function() {
+            var anoSeleccionado = $(this).val();
+            
+            $('#cuadro_identificador_premio').val(""); // Resetear la selección
+            
+            $('#cuadro_identificador_premio option').each(function() {
+                var optionAno = $(this).data('ano');
+                
+                if (anoSeleccionado === "todos" || $(this).val() === "") {
+                    $(this).show(); 
+                } else {
+                    if (optionAno == anoSeleccionado) {
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                }
+            });
+        });
     });
 </script>
 </body>

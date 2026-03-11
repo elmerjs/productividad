@@ -1,13 +1,11 @@
 <?php
 /**
  * Generador de Resoluciones CIARP - Libros de Investigación y de Texto
- * Versión Inteligente (Plan A): 
- * - Consolida múltiples libros por docente.
- * - Agrupa coautores del mismo libro (por Facultad).
+ * Versión Inteligente (Plan A - Enterprise): 
+ * - AGRUPACIÓN POR FIRMA COLECTIVA: Agrupa estrictamente por la combinación exacta de autores.
  * - Gramática dinámica para literales C y D.
- * - VARIABLES DINÁMICAS: Número, Fecha, Nombres y Cargos.
- * - INCORPORA FECHA EXACTA DEL OFICIO (fecha_solicitud) EN LOS CONSIDERANDOS.
- * - Tabla sin negrita en los campos laterales.
+ * - VARIABLES DINÁMICAS (NÚMEROS CONSECUTIVOS AUTOMÁTICOS).
+ * - INCORPORA FECHA EXACTA DEL OFICIO (fecha_solicitud).
  */
 require 'conn.php';
 require 'vendor/autoload.php';
@@ -31,16 +29,31 @@ $identificador = isset($_GET['cuadro_identificador_libro']) ? trim($_GET['cuadro
 if (empty($identificador)) die("Identificador requerido.");
 
 // =========================================================================
-// RECEPCIÓN Y GUARDADO DE VARIABLES DINÁMICAS (FORMULARIO)
+// 1. CAPTURA DE VARIABLES BASE DEL MODAL Y CONSECUTIVO
 // =========================================================================
-$num_resolucion = isset($_GET['num_resolucion']) && trim($_GET['num_resolucion']) !== '' ? trim($_GET['num_resolucion']) : '____';
+
+$base_num = null;
+$len_num = 3; 
+if (isset($_GET['num_resolucion']) && is_numeric(trim($_GET['num_resolucion']))) {
+    $str_num = trim($_GET['num_resolucion']);
+    $base_num = intval($str_num);
+    $len_num = strlen($str_num); 
+    
+    // LIMPIEZA DE LOTE: Borramos los números anteriores de este paquete para empezar en limpio
+    $stmt_clean = $conn->prepare("UPDATE libros SET num_resolucion = NULL WHERE identificador = ?");
+    $stmt_clean->bind_param("s", $identificador);
+    $stmt_clean->execute();
+    $stmt_clean->close();
+}
 
 $fecha_input = isset($_GET['fecha_resolucion']) ? trim($_GET['fecha_resolucion']) : '';
 $textoFecha = "____";
 $textoMes = "________";
 $textoAno = "____";
+$db_fecha_res = null;
 
 if (!empty($fecha_input)) {
+    $db_fecha_res = $fecha_input;
     $timestamp = strtotime($fecha_input);
     $textoFecha = date('d', $timestamp);
     $meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -62,29 +75,7 @@ if ($genero_vicerrector === 'M') {
 $nombre_reviso = isset($_GET['nombre_reviso']) && trim($_GET['nombre_reviso']) !== '' ? trim($_GET['nombre_reviso']) : 'Marjhory Castro';
 $nombre_elaboro = isset($_GET['nombre_elaboro']) && trim($_GET['nombre_elaboro']) !== '' ? trim($_GET['nombre_elaboro']) : 'Elizete Rivera';
 
-// GUARDADO EN LA BASE DE DATOS
-if (isset($_GET['num_resolucion']) || isset($_GET['fecha_resolucion'])) {
-    $db_num_res = (isset($_GET['num_resolucion']) && trim($_GET['num_resolucion']) !== '') ? trim($_GET['num_resolucion']) : null;
-    $db_fecha_res = (isset($_GET['fecha_resolucion']) && trim($_GET['fecha_resolucion']) !== '') ? trim($_GET['fecha_resolucion']) : null;
-    
-    $sql_update = "UPDATE libros SET 
-                    num_resolucion = ?, 
-                    fecha_resolucion = ?, 
-                    nombre_vicerrector = ?, 
-                    genero_vicerrector = ?, 
-                    nombre_reviso = ?, 
-                    nombre_elaboro = ? 
-                   WHERE identificador = ?";
-                   
-    if ($stmt_upd = $conn->prepare($sql_update)) {
-        $stmt_upd->bind_param("sssssss", $db_num_res, $db_fecha_res, $nombre_vicerrector, $genero_vicerrector, $nombre_reviso, $nombre_elaboro, $identificador);
-        $stmt_upd->execute();
-        $stmt_upd->close();
-    }
-}
-// =========================================================================
-
-// --- 2. CONSULTA PLANA (AGREGADO fecha_solicitud) ---
+// --- 2. CONSULTA PLANA ---
 $sql = "
     SELECT 
         l.id_libro,
@@ -111,47 +102,60 @@ $sql = "
     JOIN deparmanentos d ON t.fk_depto = d.PK_DEPTO
     JOIN facultad f ON d.FK_FAC = f.PK_FAC
     WHERE l.identificador = '" . $conn->real_escape_string($identificador) . "'
-    AND (l.estado IS NULL OR l.estado <> 'an')
-    ORDER BY f.nombre_fac_min, d.depto_nom_propio, t.nombre_completo
+    AND (l.estado IS NULL OR LOWER(TRIM(l.estado)) <> 'an')
+    ORDER BY l.id_libro, t.nombre_completo
 ";
 
 $res = $conn->query($sql);
 if ($res->num_rows === 0) die("No se encontraron registros activos para el identificador: " . htmlspecialchars($identificador));
 
-// --- 3. MOTOR DE CLASIFICACIÓN (PLAN A) ---
-$prof_records = [];
-$seen_libros = [];
+// --- 3. MOTOR DE CLASIFICACIÓN (NUEVA REGLA: POR FIRMA COLECTIVA EXACTA) ---
+$book_authors = [];
+$book_data = [];
 
 while ($row = $res->fetch_assoc()) {
-    $cc = $row['documento_tercero'];
     $id_l = $row['id_libro'];
     
-    if (!isset($prof_records[$cc])) {
-        $prof_records[$cc] = [];
-        $seen_libros[$cc] = [];
+    if (!isset($book_data[$id_l])) {
+        $book_data[$id_l] = $row; 
+        $book_authors[$id_l] = [];
     }
-    if (!in_array($id_l, $seen_libros[$cc])) {
-        $prof_records[$cc][] = $row;
-        $seen_libros[$cc][] = $id_l;
-    }
+    
+    $book_authors[$id_l][] = [
+        'documento_tercero' => $row['documento_tercero'],
+        'profe_nombre' => $row['profe_nombre'],
+        'sexo' => $row['sexo'],
+        'email' => $row['email'],
+        'departamento' => $row['departamento'],
+        'facultad' => $row['facultad']
+    ];
 }
 
-$prof_multiples = [];
-$libros_grupales = [];
+$resoluciones_grupos = [];
 
-foreach ($prof_records as $cc => $libros) {
-    if (count($libros) > 1) {
-        $prof_multiples[$cc] = $libros;
-    } else {
-        $row = $libros[0];
-        $id_l = $row['id_libro'];
-        $fac = $row['facultad'];
-        
-        if (!isset($libros_grupales[$id_l])) $libros_grupales[$id_l] = [];
-        if (!isset($libros_grupales[$id_l][$fac])) $libros_grupales[$id_l][$fac] = [];
-        
-        $libros_grupales[$id_l][$fac][] = $row;
+foreach ($book_data as $id_l => $lib_info) {
+    $autores = $book_authors[$id_l];
+    
+    // Huella Digital de los Autores (Ej: 10292635_98396856)
+    $ids = array_column($autores, 'documento_tercero');
+    sort($ids);
+    $author_key = implode('_', $ids);
+    
+    $tipo_libro = mb_strtolower(trim($lib_info['tipo_libro']), 'UTF-8');
+    $facultad = $autores[0]['facultad']; 
+    
+    // Llave maestra del grupo
+    $grupo_key = $tipo_libro . '|' . $facultad . '|' . $author_key;
+    
+    if (!isset($resoluciones_grupos[$grupo_key])) {
+        $resoluciones_grupos[$grupo_key] = [
+            'docentes' => $autores,
+            'libros' => [],
+            'facultad' => $facultad
+        ];
     }
+    
+    $resoluciones_grupos[$grupo_key]['libros'][] = $lib_info;
 }
 
 // --- 4. CONFIGURACIÓN BASE DE WORD ---
@@ -163,47 +167,42 @@ $phpWord->addFontStyle('FontTableBold', ['bold' => true, 'name' => 'Arial', 'siz
 $phpWord->addFontStyle('FontTableNormal', ['name' => 'Arial', 'size' => 9]);
 $phpWord->addParagraphStyle('ParaTable', ['spaceBefore' => 0, 'spaceAfter' => 0, 'lineHeight' => 1.0]);
 
-// Empaquetamos variables para pasarlas a la función
 $vars = [
-    'num_res' => $num_resolucion,
-    'dia' => $textoFecha,
-    'mes' => $textoMes,
-    'ano' => $textoAno,
-    'nom_vicerrector' => $nombre_vicerrector,
-    'car_vicerrector' => $cargo_vicerrector,
-    'car_presidente' => $cargo_presidente,
-    'reviso' => $nombre_reviso,
-    'elaboro' => $nombre_elaboro
+    'dia' => $textoFecha, 'mes' => $textoMes, 'ano' => $textoAno,
+    'nom_vicerrector' => $nombre_vicerrector, 'car_vicerrector' => $cargo_vicerrector,
+    'car_presidente' => $cargo_presidente, 'reviso' => $nombre_reviso, 'elaboro' => $nombre_elaboro
 ];
 
-// --- 5. BUCLE DE GENERACIÓN ---
-foreach ($prof_multiples as $cc => $libros) {
-    $docentes_list = [[
-        'documento_tercero' => $cc,
-        'profe_nombre' => $libros[0]['profe_nombre'],
-        'sexo' => $libros[0]['sexo'],
-        'email' => $libros[0]['email'],
-        'departamento' => $libros[0]['departamento']
-    ]];
-    generarResolucionLibro($phpWord, $docentes_list, $libros, $libros[0]['facultad'], $styleTable, $vars);
+// PREPARACIÓN SQL LIMPIA (7 Parámetros = ssssssi)
+$sql_update = "UPDATE libros SET num_resolucion = ?, fecha_resolucion = ?, nombre_vicerrector = ?, genero_vicerrector = ?, nombre_reviso = ?, nombre_elaboro = ? WHERE id_libro = ?";
+$stmt_upd = $conn->prepare($sql_update);
+
+// --- 5. BUCLE DE GENERACIÓN Y ACTUALIZACIÓN CONSECUTIVA ---
+foreach ($resoluciones_grupos as $grupo_key => $grupo) {
+    
+    // Calcular el consecutivo actual
+    $assigned_num_str = '____';
+    $param_num = null;
+    if ($base_num !== null) {
+        $assigned_num_str = str_pad($base_num, $len_num, "0", STR_PAD_LEFT);
+        $param_num = $assigned_num_str;
+        $base_num++; 
+    }
+
+    // Actualizamos la base de datos SÓLO para los libros de este grupo exacto
+    foreach ($grupo['libros'] as $l) {
+        $id_update = $l['id_libro'];
+        // 6 variables string, 1 variable int = "ssssssi"
+        $stmt_upd->bind_param("ssssssi", $param_num, $db_fecha_res, $nombre_vicerrector, $genero_vicerrector, $nombre_reviso, $nombre_elaboro, $id_update);
+        $stmt_upd->execute();
+    }
+
+    $vars['num_res'] = $assigned_num_str;
+
+    generarResolucionLibro($phpWord, $grupo['docentes'], $grupo['libros'], $grupo['facultad'], $styleTable, $vars);
 }
 
-foreach ($libros_grupales as $id_l => $facultades) {
-    foreach ($facultades as $fac => $profesores) {
-        $docentes_list = [];
-        foreach ($profesores as $p) {
-            $docentes_list[] = [
-                'documento_tercero' => $p['documento_tercero'],
-                'profe_nombre' => $p['profe_nombre'],
-                'sexo' => $p['sexo'],
-                'email' => $p['email'],
-                'departamento' => $p['departamento']
-            ];
-        }
-        $libros_list = [$profesores[0]]; 
-        generarResolucionLibro($phpWord, $docentes_list, $libros_list, $fac, $styleTable, $vars);
-    }
-}
+if ($stmt_upd) $stmt_upd->close();
 
 // --- 6. FUNCIÓN DE RENDERIZADO ---
 function generarResolucionLibro($phpWord, $docentes_list, $libros_list, $facultad, $styleTable, $vars) {
@@ -466,7 +465,7 @@ function generarResolucionLibro($phpWord, $docentes_list, $libros_list, $faculta
     $runR4->addText("Comunicar el presente acto administrativo a la División de Gestión del Talento Humano, para efectos del reconocimiento y efecto en la liquidación de la nómina.", 'StyleNormal');
     $section->addTextBreak(0);
 
-  // FIRMAS Y FECHA DINÁMICA
+    // FIRMAS Y FECHA DINÁMICA
     $section->addText("Se expide en Popayán, el {$vars['dia']} de {$vars['mes']} de {$vars['ano']}.", 'StyleNormal');
     $section->addTextBreak(1);
 
@@ -476,14 +475,14 @@ function generarResolucionLibro($phpWord, $docentes_list, $libros_list, $faculta
     // --- ESTILOS DE PÁRRAFO SIN ESPACIADO Y FUENTE PEQUEÑA CURSIVA ---
     $styleFirmaCenter = ['alignment' => Jc::CENTER, 'spaceAfter' => 0];
     $styleFirmaLeft = ['spaceAfter' => 0];
-    $fontFirmaPequena = ['name' => 'Arial', 'size' => 8, 'italic' => true]; // <-- AQUÍ SE AÑADE LA CURSIVA
+    $fontFirmaPequena = ['name' => 'Arial', 'size' => 8, 'italic' => true];
 
     // Imprimir firmas del Vicerrector (centradas y pegadas)
     $section->addText(mb_strtoupper($vars['nom_vicerrector'], 'UTF-8'), 'StyleBold', $styleFirmaCenter);
     $section->addText($vars['car_vicerrector'], 'StyleNormal', $styleFirmaCenter);
     $section->addText($vars['car_presidente'], 'StyleNormal', $styleFirmaCenter);
     
-    $section->addTextBreak(1); // Dejamos un salto de línea para separar la firma de los revisores
+    $section->addTextBreak(1); 
     
     // Imprimir Revisó y Elaboró (alineadas a la izquierda, pegadas, tamaño 8 y cursiva)
     $section->addText("Revisó: " . $vars['reviso'], $fontFirmaPequena, $styleFirmaLeft);

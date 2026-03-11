@@ -11,7 +11,7 @@ if($resY) { while($row = $resY->fetch_assoc()) $years[] = $row['anio_vigencia'];
 $currentYear = date('Y');
 $selectedYear = isset($_GET['anio']) ? intval($_GET['anio']) : ($years[0] ?? $currentYear);
 
-// 2. CONSULTA MAESTRA
+// 2. CONSULTA MAESTRA (AHORA IGNORA TODOS LOS ANULADOS EN TIEMPO REAL)
 $sqlMaster = "
 SELECT 
     m.fk_profesor, 
@@ -35,6 +35,23 @@ FROM matriz_productividad m
 LEFT JOIN deparmanentos d ON m.departamento = d.NOMBRE_DEPTO_CORT
 LEFT JOIN facultad f ON d.FK_FAC = f.PK_FAC
 WHERE m.anio_vigencia = $selectedYear
+
+/* --- INICIO: FILTRO DINÁMICO DE ESTADOS ANULADOS ('an') --- */
+AND NOT EXISTS (SELECT 1 FROM solicitud s WHERE m.origen_tabla = 'solicitud' AND m.origen_id = s.id_solicitud_articulo AND LOWER(TRIM(s.estado_solicitud)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM libros l WHERE m.origen_tabla = 'libros' AND m.origen_id = l.id_libro AND LOWER(TRIM(l.estado)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM titulos t WHERE m.origen_tabla = 'titulos' AND m.origen_id = t.id_titulo AND LOWER(TRIM(t.estado_titulo)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM premios p WHERE m.origen_tabla = 'premios' AND m.origen_id = p.id AND LOWER(TRIM(p.estado)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM patentes pat WHERE m.origen_tabla = 'patentes' AND m.origen_id = pat.id_patente AND LOWER(TRIM(pat.estado)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM innovacion i WHERE m.origen_tabla = 'innovacion' AND m.origen_id = i.id_innovacion AND LOWER(TRIM(i.estado)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM produccion_t_s pts WHERE m.origen_tabla = 'produccion_t_s' AND m.origen_id = pts.id_produccion AND LOWER(TRIM(pts.estado)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM trabajos_cientificos tc WHERE m.origen_tabla = 'trabajos_cientificos' AND m.origen_id = tc.id AND LOWER(TRIM(tc.estado_cient)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM trabajos_cientificos_bon tcb WHERE m.origen_tabla = 'trabajos_cientificos_bon' AND m.origen_id = tcb.id AND LOWER(TRIM(tcb.estado_tcb)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM creacion c WHERE m.origen_tabla = 'creacion' AND m.origen_id = c.id AND LOWER(TRIM(c.estado_creacion)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM creacion_bon cb WHERE m.origen_tabla = 'creacion_bon' AND m.origen_id = cb.id AND LOWER(TRIM(cb.estado_cb)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM traduccion_libros tl WHERE m.origen_tabla = 'traduccion_libros' AND m.origen_id = tl.id_traduccion AND LOWER(TRIM(tl.estado)) = 'an')
+AND NOT EXISTS (SELECT 1 FROM traduccion_bon tb WHERE m.origen_tabla = 'traduccion_bon' AND m.origen_id = tb.id AND LOWER(TRIM(tb.estado)) = 'an')
+/* --- FIN FILTRO ANULADOS --- */
+
 GROUP BY m.fk_profesor, m.nombre_profesor
 ORDER BY score_ipcp DESC";
 
@@ -76,7 +93,7 @@ if ($resMaster) {
             </div>
         </div>
         <div class="flex gap-2">
-            <a href="lista_solicitudes.php" class="text-xs text-gray-400 hover:text-white border border-gray-600 px-3 py-1.5 rounded transition">Volver</a>
+            <a href="index.php" class="text-xs text-gray-400 hover:text-white border border-gray-600 px-3 py-1.5 rounded transition">Volver</a>
             <a href="etl_llenar_matriz.php" class="bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-blue-900/40">
                 🔄 Sincronizar Datos
             </a>
@@ -266,24 +283,20 @@ function initChart() {
         let puntaje = parseFloat(d.score_ipcp || 0);
         let volumen = parseInt(d.items_salariales || 0);
 
-        if(puntaje > 40) facData[d.facultad].risk += 10;      // Crítico: Suma mucho (1 es suficiente para rojo)
-        else if(puntaje > 15) facData[d.facultad].risk += 3;  // Sustentación: Suma medio
-        else if(volumen > 8) facData[d.facultad].risk += 1;   // Volumen: Suma 1 punto
+        if(puntaje > 40) facData[d.facultad].risk += 10;      
+        else if(puntaje > 15) facData[d.facultad].risk += 3;  
+        else if(volumen > 8) facData[d.facultad].risk += 1;   
     });
     
-    // ORDENAR POR CANTIDAD (DESCENDENTE)
     const sortedFacultades = Object.keys(facData).sort((a,b) => facData[b].count - facData[a].count);
     const values = sortedFacultades.map(f => facData[f].count);
     
-    // DEFINIR COLORES SEGÚN RIESGO TOTAL
     const colors = sortedFacultades.map(f => {
         let r = facData[f].risk;
-        // console.log(`Facultad: ${f} | Riesgo: ${r}`); // Descomentar para depurar
-        
-        if(r >= 10) return '#ef4444'; // ROJO: Al menos 1 crítico o muchos problemas
-        if(r >= 3) return '#f97316';  // NARANJA: Al menos 1 sustentación o 3 volúmenes
-        if(r >= 1) return '#eab308';  // AMARILLO: Al menos 1 volumen alto
-        return '#10b981';             // VERDE: Limpio
+        if(r >= 10) return '#ef4444'; // ROJO
+        if(r >= 3) return '#f97316';  // NARANJA
+        if(r >= 1) return '#eab308';  // AMARILLO
+        return '#10b981';             // VERDE
     });
 
     const ctx = document.getElementById('chartFacultad').getContext('2d');
@@ -334,37 +347,52 @@ function verDetalle(cedula, nombre) {
         .then(data => {
             loader.classList.add('hidden');
             if(data.lista) {
+                if(data.lista) {
                 data.lista.forEach(item => {
                     let color = item.clasificacion_pago === 'PUNTOS_SALARIALES' ? 'text-blue-300' : 'text-yellow-500';
                     let badge = item.clasificacion_pago === 'PUNTOS_SALARIALES' ? 'SALARIO' : 'BONIF.';
                     
                     let brechaHTML = '';
-                    let diff = parseInt(item.anio_vigencia) - parseInt(item.anio_produccion_real);
-                    if(diff > 0) {
-                        let colorBrecha = diff >= 3 ? 'bg-orange-600' : 'bg-purple-600';
-                        brechaHTML = `<span class="text-[9px] ${colorBrecha} text-white px-1.5 py-0.5 rounded-full ml-2 shadow-sm font-bold">⏱️ +${diff} años</span>`;
-                    } else if (diff < 0) {
-                        brechaHTML = `<span class="text-[9px] bg-red-600 text-white px-1.5 py-0.5 rounded-full ml-2 font-bold">⚠️ Error Fecha</span>`;
+                    let rowOpacity = '';
+                    let rowStrike = '';
+
+                    // LÓGICA VISUAL: SI ESTÁ ANULADO LO VOLVEMOS GRIS Y TACHADO
+                    if (item.es_anulado) {
+                        badge = 'ANULADO';
+                        color = 'text-red-500';
+                        rowOpacity = 'opacity-50 grayscale'; // Lo hace grisáceo y translúcido
+                        rowStrike = 'line-through text-gray-500'; // Tacha el texto
+                        brechaHTML = `<span class="text-[9px] bg-red-900 border border-red-500 text-red-200 px-1.5 py-0.5 rounded-full ml-2 shadow-sm font-bold">🚫 DESCARTADO</span>`;
                     } else {
-                        brechaHTML = `<span class="text-[9px] text-green-500 ml-2">✓ Al día</span>`;
+                        // Lógica normal de brecha si NO está anulado
+                        let diff = parseInt(item.anio_vigencia) - parseInt(item.anio_produccion_real);
+                        if(diff > 0) {
+                            let colorBrecha = diff >= 3 ? 'bg-orange-600' : 'bg-purple-600';
+                            brechaHTML = `<span class="text-[9px] ${colorBrecha} text-white px-1.5 py-0.5 rounded-full ml-2 shadow-sm font-bold">⏱️ +${diff} años</span>`;
+                        } else if (diff < 0) {
+                            brechaHTML = `<span class="text-[9px] bg-red-600 text-white px-1.5 py-0.5 rounded-full ml-2 font-bold">⚠️ Error Fecha</span>`;
+                        } else {
+                            brechaHTML = `<span class="text-[9px] text-green-500 ml-2">✓ Al día</span>`;
+                        }
                     }
 
                     let row = `
-                        <tr class="hover:bg-gray-700/50">
+                        <tr class="hover:bg-gray-700/50 ${rowOpacity}">
                             <td class="px-4 py-2">
                                 <div class="font-bold ${color}">${item.tipo_producto}</div>
-                                <div class="text-[9px] border border-gray-600 px-1 rounded inline-block mt-1">${badge}</div>
+                                <div class="text-[9px] border border-gray-600 ${item.es_anulado ? 'bg-red-900/50 border-red-700 text-red-300' : ''} px-1 rounded inline-block mt-1">${badge}</div>
                             </td>
                             <td class="px-4 py-2">
-                                <div class="text-white font-medium">${item.titulo_producto || '-'}</div>
-                                <div class="text-[10px] text-gray-500 italic">Prod: ${item.anio_produccion_real} ${brechaHTML}</div>
+                                <div class="text-white font-medium ${rowStrike}">${item.titulo_producto || '-'}</div>
+                                <div class="text-[10px] text-gray-500 italic mt-0.5">Prod: ${item.anio_produccion_real} ${brechaHTML}</div>
                             </td>
-                            <td class="px-4 py-2 text-gray-500 text-[11px]">${item.subtipo}<br><span class="text-cyan-600">${item.detalle_extra || ''}</span></td>
+                            <td class="px-4 py-2 text-gray-500 text-[11px] ${rowStrike}">${item.subtipo}<br><span class="text-cyan-600">${item.detalle_extra || ''}</span></td>
                             <td class="px-4 py-2 text-center text-xs">👥 ${item.numero_autores}</td>
-                            <td class="px-4 py-2 text-center font-bold text-white">${item.puntaje_final}</td>
+                            <td class="px-4 py-2 text-center font-bold ${item.es_anulado ? 'text-red-500 line-through' : 'text-white'}">${item.puntaje_final}</td>
                         </tr>`;
                     tbody.innerHTML += row;
                 });
+            }
             }
             if(data.analisis) {
                 box.classList.remove('hidden');

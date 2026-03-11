@@ -5,7 +5,7 @@
  * - Estrictamente Individual (1 resolución por Docente).
  * - Tablas dinámicas (N° ACTA para nacional, CONVALIDACIÓN para exterior).
  * - Detección automática de literal (C = Doctorado, B = Maestría).
- * - VARIABLES DINÁMICAS (Firmas, Fechas, Resoluciones guardadas en BD).
+ * - VARIABLES DINÁMICAS (NÚMEROS CONSECUTIVOS AUTOMÁTICOS).
  * - Puntos limpios (floatval) y sin Fecha de Terminación visible.
  */
 require 'conn.php';
@@ -26,19 +26,29 @@ if (!function_exists('unirLista')) {
     }
 }
 
-$identificador = isset($_GET['cuadro_identificador_titulo']) ? trim($_GET['cuadro_identificador_titulo']) : '';if (empty($identificador)) die("Identificador requerido.");
+$identificador = isset($_GET['cuadro_identificador_titulo']) ? trim($_GET['cuadro_identificador_titulo']) : '';
+if (empty($identificador)) die("Identificador requerido.");
 
 // =========================================================================
-// RECEPCIÓN Y GUARDADO DE VARIABLES DINÁMICAS (FORMULARIO)
+// 1. CAPTURA DE VARIABLES BASE DEL MODAL Y CONSECUTIVO
 // =========================================================================
-$num_resolucion = isset($_GET['num_resolucion']) && trim($_GET['num_resolucion']) !== '' ? trim($_GET['num_resolucion']) : '____';
+
+$base_num = null;
+$len_num = 3; 
+if (isset($_GET['num_resolucion']) && is_numeric(trim($_GET['num_resolucion']))) {
+    $str_num = trim($_GET['num_resolucion']);
+    $base_num = intval($str_num);
+    $len_num = strlen($str_num); // Guarda la longitud para mantener los ceros (ej: 045)
+}
 
 $fecha_input = isset($_GET['fecha_resolucion']) ? trim($_GET['fecha_resolucion']) : '';
 $textoFecha = "____";
 $textoMes = "________";
 $textoAno = "____";
+$db_fecha_res = null;
 
 if (!empty($fecha_input)) {
+    $db_fecha_res = $fecha_input;
     $timestamp = strtotime($fecha_input);
     $textoFecha = date('d', $timestamp);
     $meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -60,27 +70,6 @@ if ($genero_vicerrector === 'M') {
 $nombre_reviso = isset($_GET['nombre_reviso']) && trim($_GET['nombre_reviso']) !== '' ? trim($_GET['nombre_reviso']) : 'Marjhory Castro';
 $nombre_elaboro = isset($_GET['nombre_elaboro']) && trim($_GET['nombre_elaboro']) !== '' ? trim($_GET['nombre_elaboro']) : 'Elizete Rivera';
 
-// GUARDADO SILENCIOSO EN LA BASE DE DATOS
-if (isset($_GET['num_resolucion']) || isset($_GET['fecha_resolucion'])) {
-    $db_num_res = (isset($_GET['num_resolucion']) && trim($_GET['num_resolucion']) !== '') ? trim($_GET['num_resolucion']) : null;
-    $db_fecha_res = (isset($_GET['fecha_resolucion']) && trim($_GET['fecha_resolucion']) !== '') ? trim($_GET['fecha_resolucion']) : null;
-    
-    $sql_update = "UPDATE titulos SET 
-                    num_resolucion = ?, 
-                    fecha_resolucion = ?, 
-                    nombre_vicerrector = ?, 
-                    genero_vicerrector = ?, 
-                    nombre_reviso = ?, 
-                    nombre_elaboro = ? 
-                   WHERE identificador = ?";
-                   
-    if ($stmt_upd = $conn->prepare($sql_update)) {
-        $stmt_upd->bind_param("sssssss", $db_num_res, $db_fecha_res, $nombre_vicerrector, $genero_vicerrector, $nombre_reviso, $nombre_elaboro, $identificador);
-        $stmt_upd->execute();
-        $stmt_upd->close();
-    }
-}
-// =========================================================================
 
 // --- 2. CONSULTA PLANA ---
 $sql = "
@@ -155,11 +144,34 @@ $phpWord->addFontStyle('FontTableBold', ['bold' => true, 'name' => 'Arial', 'siz
 $phpWord->addFontStyle('FontTableNormal', ['name' => 'Arial', 'size' => 9]);
 $phpWord->addParagraphStyle('ParaTable', ['spaceBefore' => 0, 'spaceAfter' => 0, 'lineHeight' => 1.0]);
 
-// --- 5. BUCLE DE GENERACIÓN: UNA RESOLUCIÓN POR DOCENTE ---
+// Preparamos la sentencia SQL para actualizar registro por registro
+$stmt_upd = $conn->prepare("UPDATE titulos SET num_resolucion = ?, fecha_resolucion = ?, nombre_vicerrector = ?, genero_vicerrector = ?, nombre_reviso = ?, nombre_elaboro = ? WHERE id_titulo = ?");
+
+
+// --- 5. BUCLE DE GENERACIÓN: UNA RESOLUCIÓN POR DOCENTE (CON CONSECUTIVO) ---
 foreach ($docentes_records as $cc => $data) {
     
     $docente = $data['info'];
     $titulos = $data['titulos'];
+
+    // -------------------------------------------------------------
+    // CALCULAR Y GUARDAR EL CONSECUTIVO ACTUAL PARA ESTE DOCENTE
+    // -------------------------------------------------------------
+    $assigned_num_str = '____';
+    $param_num = null;
+    if ($base_num !== null) {
+        $assigned_num_str = str_pad($base_num, $len_num, "0", STR_PAD_LEFT);
+        $param_num = $assigned_num_str;
+        $base_num++; // Incrementamos para el siguiente profesor
+    }
+
+    // Actualizamos la base de datos para los títulos de este profesor específico
+    foreach ($titulos as $t) {
+        $id_update = $t['id_titulo'];
+        $stmt_upd->bind_param("ssssssi", $param_num, $db_fecha_res, $nombre_vicerrector, $genero_vicerrector, $nombre_reviso, $nombre_elaboro, $id_update);
+        $stmt_upd->execute();
+    }
+    // -------------------------------------------------------------
 
     // Lógica de Género
     $sexo = strtoupper(trim($docente['sexo'] ?? ''));
@@ -233,18 +245,19 @@ foreach ($docentes_records as $cc => $data) {
 
     // --- IMPRESIÓN DEL DOCUMENTO ---
     $section->addText("4-4.5", 'StyleNormal');
-    $section->addText("RESOLUCIÓN CIARP Nº {$num_resolucion} DE {$textoAno}", 'StyleBold', ['alignment' => Jc::CENTER]);
+    // AQUÍ USAMOS EL CONSECUTIVO AUTOMÁTICO $assigned_num_str
+    $section->addText("RESOLUCIÓN CIARP Nº {$assigned_num_str} DE {$textoAno}", 'StyleBold', ['alignment' => Jc::CENTER]);
     $section->addText("({$textoFecha} de {$textoMes})", 'StyleNormal', ['alignment' => Jc::CENTER]);
-    $section->addTextBreak(0);
+    $section->addTextBreak(1);
 
     $section->addText("Por la cual se reconocen puntos a la Base – Salarial a {$txtUnProf} de la Universidad del Cauca, por concepto de Título de Posgrado.", 'StyleNormal', ['alignment' => Jc::BOTH]);
     $section->addTextBreak(0);
 
     $section->addText("EL COMITÉ INTERNO DE ASIGNACIÓN Y RECONOCIMIENTO DE PUNTAJE DE LA UNIVERSIDAD DEL CAUCA en ejercicio de la competencia conferida por el artículo 25 del Decreto 1279 de 2002 y artículo 50 del Acuerdo Superior 024 de 1993 y,", 'StyleNormal', ['alignment' => Jc::BOTH]);
-    $section->addTextBreak(0);
+    $section->addTextBreak(1);
     
     $section->addText("C O N S I D E R A N D O QUE:", 'StyleBold', ['alignment' => Jc::CENTER]);
-    $section->addTextBreak(0);
+    $section->addTextBreak(1);
 
     $section->addText("El Estatuto del profesor Universitario – Acuerdo 024 de 1993, reglamenta las funciones del Comité Interno de Asignación y Reconocimiento de Puntaje –CIARP, conforme a las disposiciones del Decreto 1279 de 2002, cuya competencia para las decisiones de reconocimiento y asignación de puntaje fue delegada por el Rector de la Universidad del Cauca a la Vicerrectora Académica mediante Resolución 698 de 2022, modificada por la Resolución 0243 de 2023.", 'StyleNormal', ['alignment' => Jc::BOTH]);
     
@@ -280,13 +293,6 @@ foreach ($docentes_records as $cc => $data) {
         $table->addCell(3000)->addText("INSTITUCIÓN", 'FontTableBold', 'ParaTable');
         $table->addCell(6000)->addText(mb_strtoupper($ti['institucion'], 'UTF-8'), 'FontTableNormal', 'ParaTable');
 
-        // FECHA DE TERMINACIÓN COMENTADA
-        /*
-        $table->addRow();
-        $table->addCell(3000)->addText("FECHA DE TERMINACIÓN", 'FontTableBold', 'ParaTable');
-        $table->addCell(6000)->addText($ti['fecha_terminacion'], 'FontTableNormal', 'ParaTable');
-        */
-
         if (strtoupper(trim($ti['tipo'])) === 'EXTERIOR') {
             $table->addRow();
             $table->addCell(3000)->addText("RESOLUCIÓN DE CONVALIDACIÓN", 'FontTableBold', 'ParaTable');
@@ -307,10 +313,9 @@ foreach ($docentes_records as $cc => $data) {
         $table->addCell(3000)->addText("RECONOCER", 'FontTableBold', 'ParaTable');
         $table->addCell(6000)->addText(floatval($ti['puntaje']) . " PUNTOS", 'FontTableBold', 'ParaTable');
         
-        $section->addTextBreak(0);
+        $section->addTextBreak(1);
     }
 
-    // ELIMINADO EL "de ____" AL FINAL DEL PÁRRAFO
     $section->addText("El Comité de Personal Docente de la {$nomFacultad}, remitió al CIARP mediante oficio N° {$textoOficios}, la solicitud y documentación para lo concerniente al otorgamiento de puntos, de conformidad con lo previsto en el Decreto 1279 de 2002, artículo 7, numeral 2, {$palabraLiteral} {$textoLiteral}.", 'StyleNormal', ['alignment' => Jc::BOTH]);
     
     $section->addText("Los documentos, fueron analizados por el Comité Interno de Asignación y Reconocimiento de Puntaje en sesión del {$textoFecha} de {$textoMes} de {$textoAno}, con fundamento en el concepto del Comité de Personal Docente de su facultad, y decidió reconocer {$puntajeTotal} puntos como lo dispone la norma.", 'StyleNormal', ['alignment' => Jc::BOTH]);
@@ -318,7 +323,7 @@ foreach ($docentes_records as $cc => $data) {
     // --- PARTE RESOLUTIVA ---
     $section->addText("En consideración a lo expuesto,", 'StyleNormal');
     $section->addText("RESUELVE:", 'StyleBold', ['alignment' => Jc::CENTER]);
-    $section->addTextBreak(0);
+    $section->addTextBreak(1);
 
     $runR1 = $section->addTextRun(['alignment' => Jc::BOTH]);
     $runR1->addText("ARTÍCULO PRIMERO. ", 'StyleBold');
@@ -331,7 +336,6 @@ foreach ($docentes_records as $cc => $data) {
     
     $runR2 = $section->addTextRun(['alignment' => Jc::BOTH]);
     $runR2->addText("ARTÍCULO SEGUNDO. ", 'StyleBold');
-    // CORRECCIÓN "días hábiles"
     $runR2->addText("Notificar el presente acto administrativo {$txtAlProfesor}, bajo los parámetros de la Ley 1437 de 2011, a través de medio electrónico, conforme a su autorización expresa en el formato PM-FO-4-FOR-4, al correo {$correoStr} advirtiéndole que contra ésta procede el Recurso de Reposición ante la Vicerrectoría Académica (Comité CIARP) y en subsidio el de Apelación ante el Consejo Académico de la Universidad del Cauca dentro de los diez (10) días hábiles siguientes a la fecha de la notificación.", 'StyleNormal');
     $section->addTextBreak(0);
 
@@ -341,7 +345,6 @@ foreach ($docentes_records as $cc => $data) {
     $section->addTextBreak(0);
 
     // FIRMAS VARIABLES
-  // FIRMAS VARIABLES
     $section->addText("Se expide en Popayán, el {$textoFecha} de {$textoMes} de {$textoAno}.", 'StyleNormal');
     $section->addTextBreak(1);
 
@@ -353,7 +356,6 @@ foreach ($docentes_records as $cc => $data) {
     $styleFirmaLeft = ['spaceAfter' => 0];
     $fontFirmaPequena = ['name' => 'Arial', 'size' => 8, 'italic' => true]; 
     
-    // ¡AQUÍ ESTÁ EL CAMBIO! Aplicamos la variable $styleFirmaCenter a las 3 líneas
     $section->addText(mb_strtoupper($nombre_vicerrector, 'UTF-8'), 'StyleBold', $styleFirmaCenter);
     $section->addText($cargo_vicerrector, 'StyleNormal', $styleFirmaCenter);
     $section->addText($cargo_presidente, 'StyleNormal', $styleFirmaCenter);
@@ -366,6 +368,9 @@ foreach ($docentes_records as $cc => $data) {
 
     $section->addPageBreak();
 }
+
+if ($stmt_upd) $stmt_upd->close();
+
 // --- 6. DESCARGA SEGURA ---
 if (ob_get_contents()) ob_end_clean();
 $nombreFile = "Resolucion_Titulos_" . preg_replace('/[^A-Za-z0-9]/', '_', $identificador) . ".docx";

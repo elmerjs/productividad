@@ -135,13 +135,16 @@
             <p class="main-subtitle">Seleccione una categoría para visualizar los registros de docentes.</p>
         </div>
         <div class="top-actions d-flex gap-2">
-            <a href="MENU_INI.PHP" class="btn btn-light border shadow-sm text-secondary">
-                <i class="fas fa-bars"></i> Formularios
-            </a>
-            <a href="listados.php" class="btn btn-primary shadow-sm">
-                <i class="fas fa-list-check"></i> Ver Listados
-            </a>
-        </div>
+                <a href="MENU_INI.PHP" class="btn btn-light border shadow-sm text-secondary">
+                    <i class="fas fa-bars"></i> Formularios
+                </a>
+                <a href="listados.php" class="btn btn-primary shadow-sm">
+                    <i class="fas fa-list-check"></i> Ver Listados
+                </a>
+                <a href="reporte_resoluciones.php" class="btn btn-dark shadow-sm" title="Historial completo de todas las resoluciones">
+                    <i class="fas fa-file-signature text-warning"></i> Historial Resoluciones
+                </a>
+            </div>
     </div>
 
     <div class="container-fluid px-4 mb-5">
