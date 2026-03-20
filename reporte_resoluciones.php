@@ -179,7 +179,7 @@ foreach ($grouped_data as $vig => &$paquetes) {
             <p class="text-secondary mt-1">Gestión jerárquica por vigencias y paquetes generados</p>
         </div>
         
-        <a href="MENU_INI.PHP" class="btn btn-outline-secondary shadow-sm">
+        <a href="index.php" class="btn btn-outline-secondary shadow-sm">
             <i class="fas fa-arrow-left me-2"></i> Volver al Menú
         </a>
     </div>

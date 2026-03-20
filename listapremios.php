@@ -47,7 +47,7 @@ if (!empty($ano)) {
     $sql .= " AND YEAR(p.fecha_solicitud) = '" . $conn->real_escape_string($ano) . "'";
 }
 
-// Agrupar resultados
+// Agrupar resultados y ordenar descendente
 $sql .= " GROUP BY p.id, f.nombre_fac_min, d.depto_nom_propio, p.nombre_evento, p.ambito, p.categoria_premio, p.nivel_ganado, p.lugar_fecha, p.numero_oficio";
 $sql .= " ORDER BY p.id DESC";
 
@@ -61,158 +61,234 @@ $unique_years = [];
 
 while ($row = $identificadores_result->fetch_assoc()) {
     $identificadores[] = $row;
-    
-    // Extraer los primeros 4 dígitos para tener la lista de años
     $year = substr($row['identificador'], 0, 4);
     if (!empty($year) && is_numeric($year) && !in_array($year, $unique_years)) {
         $unique_years[] = $year;
     }
 }
-rsort($unique_years); // Ordenar años de mayor a menor
+rsort($unique_years);
+
+// --- OBTENER LOS ÚLTIMOS 6 LOTES PARA EL CARRUSEL ---
+$ultimos_lotes_result = $conn->query("SELECT DISTINCT identificador FROM premios WHERE identificador IS NOT NULL AND identificador != '' ORDER BY identificador DESC LIMIT 6");
+$ultimos_lotes = [];
+if ($ultimos_lotes_result) {
+    while ($row = $ultimos_lotes_result->fetch_assoc()) {
+        $ultimos_lotes[] = $row['identificador'];
+    }
+}
 ?>
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Listado de Premios</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.12.1/css/jquery.dataTables.min.css">
-    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
-    <style>
-        .modal { display: none; position: fixed; z-index: 1050; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0, 0, 0, 0.5); padding-top: 60px; }
-        .modal-content { background-color: #fefefe; margin: 2% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 600px; border-radius: 8px;}
-        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; }
-        .close:hover, .close:focus { color: black; text-decoration: none; cursor: pointer; }
-        .limited-text { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    </style>
-</head>
-<body>
+<style>
+    /* 1. AJUSTES DE INTEGRACIÓN CON PREFIJO */
+    .premios-module-wrapper {
+        background-color: transparent;
+        padding: 0;
+        color: #334155;
+    }
 
-<div class="container-fluid mt-4">
-    <h1>Listado de Premios</h1>
+    .premios-page-header {
+        margin-bottom: 1.2rem;
+        border-bottom: 1px solid #f1f5f9;
+        padding-bottom: 0.8rem;
+    }
+
+    /* 5. TABLA ULTRA-COMPRIMIDA */
+    #premios_tabla_principal thead th {
+        background-color: #f8fafc;
+        color: #475569;
+        border-bottom: 2px solid #e2e8f0;
+        font-size: 0.7rem; 
+        font-weight: 700;
+        padding: 6px 8px; 
+        text-transform: uppercase;
+    }
+    #premios_tabla_principal tbody td {
+        vertical-align: middle;
+        font-size: 0.78rem; 
+        color: #334155;
+        border-bottom: 1px solid #f1f5f9;
+        padding: 3px 8px !important; 
+        line-height: 1.15; 
+    }
+
+    /* 7. MODALES CON ID ÚNICO */
+    .premios-modal {
+        display: none;
+        position: fixed;
+        z-index: 1050;
+        left: 0; top: 0;
+        width: 100%; height: 100%;
+        background-color: rgba(15, 23, 42, 0.4); 
+        backdrop-filter: blur(6px);
+        padding-top: 6vh;
+    }
+    .premios-modal-content {
+        background-color: #ffffff;
+        margin: auto;
+        padding: 2rem;
+        width: 90%; 
+        max-width: 600px;
+        border-radius: 20px; 
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
+</style>
+
+<div class="premios-module-wrapper">
     
-    <div class="mb-3">
-        <button id="openModalpr" class="btn btn-primary">Generar XLS</button>
-        <button id="openModalCuadrospr" class="btn btn-secondary">Generar Cuadros</button>
-        <button id="openModalResolucionespr" class="btn btn-info text-white">Generar Resoluciones</button>
-    </div>
-
-    <table id="premios" class="display table table-striped table-bordered">
-        <thead>
-            <tr>                
-                <th>ID</th>
-                <th>IDENTIFICADOR</th>
-                <th>DEPARTAMENTO</th>
-                <th>OFICIO</th>
-                <th>NOMBRES</th>
-                <th>EVENTO PREMIO</th>
-                <th>AMBITO</th>
-                <th>CATEGORIA PREMIO</th>
-                <th>NIVEL GANADO</th>
-                <th>LUGAR Y FECHA</th>
-                <th>PUNTAJE</th>
-                <th>ESTADO</th>
-                <th>ACCIONES</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php
-            while ($row = $result->fetch_assoc()) {
-                $facultad = $row['FACULTAD'];
-                $facultadTruncada = strlen($facultad) > 20 ? substr($facultad, 0, 20) . '...' : $facultad;
-                
-                echo '<tr>';
-                echo '<td>' . htmlspecialchars($row['id']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['identificador']) . '</td>';
-
-                echo '<td class="facultad-truncate" title="' 
-                    . htmlspecialchars($row['DEPARTAMENTO']) . ' - ' . htmlspecialchars($facultad) . '">'
-                    . htmlspecialchars(substr($row['DEPARTAMENTO'], 0, 20)) . ' - ' . $facultadTruncada 
-                    . '</td>';
-                
-                echo '<td>' . htmlspecialchars($row['numero_oficio']) . '</td>';
-
-                echo '<td class="limited-text" title="' . htmlspecialchars($row['DETALLES PROFESORES']) . '">'
-                     . htmlspecialchars(substr($row['DETALLES PROFESORES'], 0, 20)) . (strlen($row['DETALLES PROFESORES']) > 20 ? '...' : '')
-                     . '</td>';
-                
-                echo '<td>' . htmlspecialchars($row['EVENTO_PREMIO']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['AMBITO']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['CATEGORIA_PREMIO']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['NIVEL_GANADO']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['LUGAR_Y_FECHA']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['puntos']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['estado']) . '</td>';
-
-                echo '<td>';
-                echo '<a href="editar_premios.php?id=' . $row['id'] . '" class="btn btn-warning btn-sm">Editar</a> ';
-                echo '<button class="btn btn-danger btn-sm" onclick="confirmDeleteWithReason(' . $row['id'] . ')">Eliminar</button>';
-                echo '</td>';
-                echo '</tr>';
-            }
-            ?>
-        </tbody>
-    </table>
-
-    <div id="modalpr" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Filtrar por Solicitud o Año</h2>
-            <form action="report_premios.php" method="GET">
-                <label for="identificador_solicitud">Identificador de Solicitud:</label>
-                <select name="identificador_solicitud" id="identificador_solicitud" class="form-control">
-                    <option value="">Selecciona un identificador</option>
-                    <?php
-                    foreach ($identificadores as $row_ident) {
-                        echo '<option value="' . htmlspecialchars($row_ident['identificador']) . '">' . htmlspecialchars($row_ident['identificador']) . '</option>';
-                    }
-                    ?>
-                </select>
-                <br><br>
-                <label for="ano">Año:</label>
-                <input type="number" name="ano" id="ano" class="form-control">
-                <br><br>
-                <input type="submit" value="Generar Reporte" class="btn btn-primary">
-            </form>
+    <div class="premios-page-header d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <h1 class="page-title-inner" style="font-weight: 700; color: #0f172a; font-size: 1.4rem;">Registro de Premios</h1>
+            <p class="page-subtitle-inner" style="color: #64748b; font-size: 0.85rem;">Listado maestro de reconocimientos y galardones académicos</p>
+        </div>
+        
+        <div class="d-flex gap-2 flex-wrap">
+            <button id="premios_openModalXls" class="btn-modern btn-m-xls">
+                <i class="fas fa-file-excel"></i> Exportar XLS
+            </button>
+            <button id="premios_openModalCuadros" class="btn-modern btn-m-cuadros">
+                <i class="fas fa-table"></i> Generar Cuadros
+            </button>
+            <button id="premios_openModalResoluciones" class="btn-modern btn-m-res">
+                <i class="fas fa-file-signature"></i> Resoluciones
+            </button>
         </div>
     </div>
 
-    <div id="modalCuadrospr" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2>Filtrar para Generar Cuadros</h2>
-            <form action="cuadros_premios.php" method="GET">
-                <label for="cuadro_identificador">Identificador de Solicitud:</label>
-                <select name="cuadro_identificador" id="cuadro_identificador" class="form-control">
-                    <option value="">Selecciona un identificador</option>
-                    <?php
-                    foreach ($identificadores as $row_ident) {
-                        echo '<option value="' . htmlspecialchars($row_ident['identificador']) . '">' . htmlspecialchars($row_ident['identificador']) . '</option>';
+    <div class="table-responsive">
+        <table id="premios_tabla_principal" class="table table-hover align-middle" style="width:100%">
+            <thead>
+                <tr>                
+                    <th class="text-center">ID</th>
+                    <th>IDENTIF.</th>
+                    <th>DEPARTAMENTO</th>
+                    <th>OFICIO</th>
+                    <th>PROFESORES</th>
+                    <th>EVENTO / PREMIO</th>
+                    <th>ÁMBITO</th>
+                    <th>CATEGORÍA</th>
+                    <th>NIVEL</th>
+                    <th class="text-center">PTS</th>
+                    <th>ESTADO</th>
+                    <th class="text-center">ACCIONES</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php
+                while ($row = $result->fetch_assoc()) {
+                    $facultad = str_replace("Facultad de ", "", $row['FACULTAD']);
+                    $estadoOriginal = strtolower(trim($row['estado']));
+                    $estadoTexto = strtoupper($estadoOriginal ?: 'SIN ESTADO');
+                    
+                    if ($estadoOriginal === 'an' || strpos($estadoOriginal, 'anulado') !== false) {
+                        $estadoTexto = 'ANULADO';
+                        $htmlEstado = '<span class="status-pill status-anulado"><span class="status-dot bg-secondary"></span>' . $estadoTexto . '</span>';
+                    } else {
+                        $dotColor = 'bg-secondary'; 
+                        if ($estadoOriginal === 'ac' || strpos($estadoOriginal, 'aprobado') !== false) {
+                            $dotColor = 'bg-success'; 
+                            $estadoTexto = 'ACTIVO';
+                        }
+                        elseif (strpos($estadoOriginal, 're') !== false) $dotColor = 'bg-danger';
+                        elseif (strpos($estadoOriginal, 'pe') !== false) $dotColor = 'bg-warning';
+                        $htmlEstado = '<span class="status-pill"><span class="status-dot ' . $dotColor . '"></span>' . $estadoTexto . '</span>';
                     }
-                    ?>
-                </select>
-                <br>
-                <label for="cuadro_ano">Año:</label>
-                <input type="number" name="cuadro_ano" id="cuadro_ano" class="form-control">
-                <br><br>
-                <input type="submit" value="Generar Cuadro" class="btn btn-secondary">
-            </form>
-        </div>
+
+                    echo '<tr>';
+                    echo '<td class="text-center fw-bold text-primary">' . $row['id'] . '</td>';
+                    echo '<td><span class="badge bg-light text-secondary border px-1">' . htmlspecialchars($row['identificador']) . '</span></td>';
+                    echo '<td><div class="text-truncate-custom fw-medium text-dark" style="max-width: 120px;" title="Facultad: ' . htmlspecialchars($facultad) . '">' . htmlspecialchars($row['DEPARTAMENTO']) . '</div></td>';
+                    echo '<td><small class="text-secondary">' . htmlspecialchars($row['numero_oficio']) . '</small></td>';
+                    echo '<td><div class="text-truncate-custom" style="max-width: 140px;" title="' . htmlspecialchars($row['DETALLES PROFESORES']) . '">' . htmlspecialchars($row['NOMBRES']) . '</div></td>';
+                    echo '<td><div class="text-truncate-custom" style="max-width: 160px;" title="' . htmlspecialchars($row['EVENTO_PREMIO']) . '">' . htmlspecialchars($row['EVENTO_PREMIO']) . '</div></td>';
+                    echo '<td><span class="badge bg-light text-secondary border px-1">' . htmlspecialchars($row['AMBITO']) . '</span></td>';
+                    echo '<td><div class="text-truncate-custom" style="max-width: 100px;" title="' . htmlspecialchars($row['CATEGORIA_PREMIO']) . '">' . htmlspecialchars($row['CATEGORIA_PREMIO']) . '</div></td>';
+                    echo '<td><small class="text-muted">' . htmlspecialchars($row['NIVEL_GANADO']) . '</small></td>';
+                    echo '<td class="text-center fw-bold text-success">' . htmlspecialchars($row['puntos']) . '</td>';
+                    echo '<td>' . $htmlEstado . '</td>';
+                    echo '<td class="text-center text-nowrap">';
+                    echo '<a href="editar_premios.php?id=' . $row['id'] . '" class="btn btn-light border btn-action text-primary shadow-sm"><i class="fas fa-pen"></i></a> ';
+                    echo '<button class="btn btn-light border btn-action text-danger shadow-sm" onclick="premios_confirmarAnulacion(' . $row['id'] . ')"><i class="fas fa-trash-alt"></i></button>';
+                    echo '</td>';
+                    echo '</tr>';
+                }
+                ?>
+            </tbody>
+        </table>
     </div>
 
-    <div id="modalResolucionespr" class="modal">
-        <div class="modal-content" style="max-width: 700px;">
-            <span class="close">&times;</span>
-            <h2 class="mb-4">Generar Resoluciones de Premios (Word)</h2>
+    <div class="quick-audit-section">
+        <div class="quick-audit-title"><i class="fas fa-folder-tree text-secondary me-1"></i> Auditoría de Lotes</div>
+        <div class="lotes-carousel">
+            <?php foreach($ultimos_lotes as $lote): ?>
+                <a href="#" class="lote-card"><i class="fas fa-trophy text-warning"></i> <?php echo htmlspecialchars($lote); ?></a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+
+<div id="premios_modalXls" class="premios-modal">
+    <div class="premios-modal-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+             <h4 class="fw-bold text-success m-0"><i class="fas fa-file-excel me-2"></i>Reporte XLS Premios</h4>
+             <span class="close premios_closeModalXls">&times;</span>
+        </div>
+        <form action="report_premios.php" method="GET">
+            <div class="mb-3">
+                <label class="form-label text-secondary fw-semibold">Identificador:</label>
+                <select name="identificador_solicitud" id="premios_identificador_xls" class="form-select">
+                    <option value="">Selecciona un identificador</option>
+                    <?php foreach ($identificadores as $id_sol): ?>
+                        <option value="<?= htmlspecialchars($id_sol['identificador']) ?>"><?= htmlspecialchars($id_sol['identificador']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="form-label text-secondary fw-semibold">Año:</label>
+                <input type="number" name="ano" id="premios_ano_xls" class="form-control" placeholder="Ej: 2024">
+            </div>
+            <button type="submit" class="btn btn-success w-100">Generar Reporte</button>
+        </form>
+    </div>
+</div>
+
+<div id="premios_modalCuadros" class="premios-modal">
+    <div class="premios-modal-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+             <h4 class="fw-bold text-primary m-0"><i class="fas fa-table me-2"></i>Generar Cuadros</h4>
+             <span class="close premios_closeModalCuadros">&times;</span>
+        </div>
+        <form action="cuadros_premios.php" method="GET">
+            <div class="mb-3">
+                <label class="form-label text-secondary fw-semibold">Identificador:</label>
+                <select name="cuadro_identificador" id="premios_identificador_cuadros" class="form-select">
+                    <option value="">Selecciona...</option>
+                    <?php foreach ($identificadores as $id_sol): ?>
+                        <option value="<?= htmlspecialchars($id_sol['identificador']) ?>"><?= htmlspecialchars($id_sol['identificador']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="form-label text-secondary fw-semibold">Año:</label>
+                <input type="number" name="cuadro_ano" id="premios_ano_cuadros" class="form-control" placeholder="Ej: 2024">
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Generar Cuadro</button>
+        </form>
+    </div>
+</div>
+
+<div id="premios_modalResoluciones" class="premios-modal">
+        <div class="modal-content" style="max-width: 650px;">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+             <h4 class="fw-bold text-info m-0" style="color: #0284c7 !important;"><i class="fas fa-file-word me-2"></i>Resoluciones Premios</h4>
+             <span class="close close-resoluciones-pr">&times;</span>
+        </div>
+        <div class="modal-body p-0">
             <form action="resoluciones_premios.php" method="GET">
                 
-                <div class="row bg-light p-3 mb-3 border rounded">
+                <div class="row bg-light p-3 mb-4 border rounded-3 mx-0">
                     <div class="col-md-6 mb-2">
-                        <label for="filtro_ano_premios" class="fw-bold">Año del Paquete:</label>
-                        <select id="filtro_ano_premios" class="form-control">
+                        <label for="filtro_ano_premios" class="form-label text-secondary fw-semibold">Año del Paquete:</label>
+                        <select id="filtro_ano_premios" class="form-select">
                             <option value="todos">Todos los años</option>
                             <?php
                             foreach ($unique_years as $ano_val) {
@@ -222,8 +298,8 @@ rsort($unique_years); // Ordenar años de mayor a menor
                         </select>
                     </div>
                     <div class="col-md-6 mb-2">
-                        <label for="cuadro_identificador_premio" class="fw-bold">Identificador (Paquete):</label>
-                        <select name="cuadro_identificador_premio" id="cuadro_identificador_premio" class="form-control" required>
+                        <label for="cuadro_identificador_premio" class="form-label text-secondary fw-semibold">Identificador:</label>
+                        <select name="cuadro_identificador_premio" id="cuadro_identificador_premio" class="form-select" required>
                             <option value="">Selecciona un identificador</option>
                             <?php
                             foreach ($identificadores as $row_ident) {
@@ -235,109 +311,117 @@ rsort($unique_years); // Ordenar años de mayor a menor
                     </div>
                 </div>
 
-                <h5 class="mb-3 text-primary">Datos de la Resolución (Opcionales)</h5>
-                <div class="row">
+                <h6 class="mb-3 text-secondary border-bottom pb-2 fw-bold">Datos de la Resolución (Opcionales)</h6>
+                <div class="row px-2">
                     <div class="col-md-6 mb-3">
-                        <label for="num_resolucion">Número de resolución (Inicial):</label>
+                        <label for="num_resolucion" class="form-label text-muted">Número de resolución:</label>
                         <input type="text" name="num_resolucion" id="num_resolucion" class="form-control" placeholder="Ej: 045">
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label for="fecha_resolucion">Fecha de la resolución:</label>
+                        <label for="fecha_resolucion" class="form-label text-muted">Fecha de la resolución:</label>
                         <input type="date" name="fecha_resolucion" id="fecha_resolucion" class="form-control">
                     </div>
                 </div>
 
-                <div class="row">
+                <div class="row px-2">
                     <div class="col-md-8 mb-3">
-                        <label for="nombre_vicerrector">Firma (Vicerrector/a):</label>
+                        <label for="nombre_vicerrector" class="form-label text-muted">Firma (Vicerrector/a):</label>
                         <input type="text" name="nombre_vicerrector" id="nombre_vicerrector" class="form-control" value="AIDA PATRICIA GONZÁLEZ NIEVA" required>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label for="genero_vicerrector">Género:</label>
-                        <select name="genero_vicerrector" id="genero_vicerrector" class="form-control" required>
+                        <label for="genero_vicerrector" class="form-label text-muted">Género:</label>
+                        <select name="genero_vicerrector" id="genero_vicerrector" class="form-select" required>
                             <option value="F">Femenino</option>
                             <option value="M">Masculino</option>
                         </select>
                     </div>
                 </div>
 
-                <div class="row">
+                <div class="row px-2">
                     <div class="col-md-6 mb-4">
-                        <label for="nombre_reviso">Revisó:</label>
+                        <label for="nombre_reviso" class="form-label text-muted">Revisó:</label>
                         <input type="text" name="nombre_reviso" id="nombre_reviso" class="form-control" value="Marjhory Castro" required>
                     </div>
                     <div class="col-md-6 mb-4">
-                        <label for="nombre_elaboro">Elaboró:</label>
+                        <label for="nombre_elaboro" class="form-label text-muted">Elaboró:</label>
                         <input type="text" name="nombre_elaboro" id="nombre_elaboro" class="form-control" value="Elizete Rivera" required>
                     </div>
                 </div>
 
-                <input type="submit" value="Generar Resoluciones Word" class="btn btn-info text-white w-100 fs-5">
+                <div class="d-grid mt-2">
+                    <button type="submit" class="btn btn-info text-white btn-lg shadow-sm rounded-3" style="background-color: #0ea5e9; border-color: #0ea5e9;"><i class="fas fa-file-word me-2"></i>Generar Word</button>
+                </div>
             </form>
         </div>
     </div>
-
 </div>
 
 <script>
-    function confirmDeleteWithReason(id) {
-        const confirmation = confirm("¿Estás seguro de que quieres eliminar esta solicitud?");
-        if (confirmation) {
-            const motivo = prompt("Por favor, indique el motivo de la anulación:");
-            if (motivo && motivo.trim() !== "") {
-                window.location.href = 'eliminar_solicitud_premio.php?id_solicitud=' + id + '&motivo=' + encodeURIComponent(motivo);
-            } else {
-                alert("El motivo de la anulación es obligatorio.");
-            }
-        }
-    }
-</script>
+/**
+ * Encapsulamiento del Módulo de Premios
+ */
+(function() {
+    function initModulePremios() {
+        $(function() {
+            // Referencias a modales
+            const $mXls = $('#premios_modalXls');
+            const $mCuadros = $('#premios_modalCuadros');
+            const $mRes = $('#premios_modalResoluciones');
 
-<script>
-    $(document).ready(function() {
-        $('#premios').DataTable({
-            responsive: true,
-            language: {
-                url: 'https://cdn.datatables.net/plug-ins/1.12.1/i18n/Spanish.json'
-            }
-        });
-        
-        // Control de los modales
-        $('#openModalpr').on('click', function() { $('#modalpr').show(); });
-        $('#openModalCuadrospr').on('click', function() { $('#modalCuadrospr').show(); });
-        $('#openModalResolucionespr').on('click', function() { $('#modalResolucionespr').show(); }); 
-        
-        // Cerrar cualquier modal al hacer clic en la "X"
-        $('.close').on('click', function() { $(this).closest('.modal').hide(); });
-        
-        // Cerrar si se hace clic fuera de la caja del modal
-        $(window).click(function(event) {
-            if ($(event.target).is(".modal")) {
-                $(".modal").hide();
-            }
-        });
+            // Abrir Modales
+            $('#premios_openModalXls').on('click', function() { $mXls.fadeIn(200); });
+            $('#premios_openModalCuadros').on('click', function() { $mCuadros.fadeIn(200); });
+            $('#premios_openModalResoluciones').on('click', function() { $mRes.fadeIn(200); });
 
-        // Evento de filtrado por año para el modal de Resoluciones
-        $('#filtro_ano_premios').on('change', function() {
-            var anoSeleccionado = $(this).val();
-            
-            $('#cuadro_identificador_premio').val(""); // Resetear la selección
-            
-            $('#cuadro_identificador_premio option').each(function() {
-                var optionAno = $(this).data('ano');
-                
-                if (anoSeleccionado === "todos" || $(this).val() === "") {
-                    $(this).show(); 
-                } else {
-                    if (optionAno == anoSeleccionado) {
+            // Cerrar Modales
+            $('.premios_closeModalXls').on('click', function() { $mXls.fadeOut(200); });
+            $('.premios_closeModalCuadros').on('click', function() { $mCuadros.fadeOut(200); });
+            $('.premios_closeModalResoluciones').on('click', function() { $mRes.fadeOut(200); });
+
+            $(window).on('click', function(e) {
+                if ($(e.target).hasClass('premios-modal')) {
+                    $('.premios-modal').fadeOut(200);
+                }
+            });
+
+            // Lógica de filtrado de años en el modal de resoluciones
+            $('#premios_filtro_ano_res').on('change', function() {
+                const year = $(this).val();
+                $('#premios_identificador_res').val("");
+                $('#premios_identificador_res option').each(function() {
+                    const optYear = $(this).data('ano');
+                    if (year === "todos" || !optYear || optYear == year) {
                         $(this).show();
                     } else {
                         $(this).hide();
                     }
-                }
+                });
             });
+
+            // Exponer función de eliminación al ámbito global con prefijo
+            window.premios_confirmarAnulacion = function(id) {
+                if (confirm("¿Estás seguro de que quieres eliminar esta solicitud?")) {
+                    const motivo = prompt("Indique el motivo de la anulación:");
+                    if (motivo && motivo.trim() !== "") {
+                        window.location.href = 'eliminar_solicitud_premio.php?id_solicitud=' + id + '&motivo=' + encodeURIComponent(motivo);
+                    } else if (motivo !== null) {
+                        alert("El motivo es obligatorio.");
+                    }
+                }
+            };
         });
-    });
+    }
+
+    // Mecanismo de espera de jQuery (Polling)
+    if (window.jQuery) {
+        initModulePremios();
+    } else {
+        const checkJQ = setInterval(function() {
+            if (window.jQuery) {
+                clearInterval(checkJQ);
+                initModulePremios();
+            }
+        }, 20);
+    }
+})();
 </script>
-</body>
-</html>

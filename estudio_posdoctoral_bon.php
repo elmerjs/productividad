@@ -2,214 +2,184 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>EStudio posdoctoral</title>
-    <!-- Enlace al CDN de Bootstrap -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estudio Posdoctoral | CIARP</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
-        /* Estilos personalizados */
-        body {
-            background-color: #f8f9fa;
-        }
-        .container {
+        body { background-color: #f4f7f6; color: #4a4a4a; }
+        .card-custom {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
             background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             padding: 30px;
-            max-width: 800px;
             margin-top: 30px;
+            margin-bottom: 50px;
         }
-        h1 {
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #2c3e50;
+            border-bottom: 2px solid #eef2f7;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            margin-top: 20px;
+        }
+        .datos-container {
+            font-size: 0.85rem;
+            background-color: #f8fafd;
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #10b981; /* Verde para bonificaciones */
+            min-height: 45px;
+            display: flex;
+            align-items: center;
+            color: #334155;
+            transition: all 0.3s ease;
+        }
+        .form-control:focus {
+            border-color: #10b981;
+            box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.1);
+        }
+        label { font-size: 0.85rem; margin-bottom: 0.4rem; font-weight: 600; }
+        .puntaje-destacado {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #10b981;
+            border-color: #10b981;
+            background-color: #f0fdf4;
+        }
+        .badge-bono {
+            background-color: #10b981;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8rem;
             font-weight: 600;
-            color: #343a40;
-            text-align: center;
+            text-transform: uppercase;
         }
-        label {
-            font-weight: bold;
-            color: #495057;
-        }
-        .input-group, .form-control {
-            border-radius: 6px;
-        }
-        #contenedor_documentos {
-            background-color: #f0f4f8;
-            padding: 15px;
-            border-radius: 6px;
-        }
-        .datos-container {
-            font-style: italic;
-            color: #6c757d;
-        }
-        .btn-primary, .btn-secondary {
-            border-radius: 6px;
-        }
-        .datos-container {
-    margin-top: 10px; /* Espacio superior */
-    font-size: 14px;  /* Tamaño de la fuente */
-    color: #333;      /* Color del texto */
-    background-color: #f9f9f9; /* Fondo ligero para destacar */
-    padding: 10px;    /* Espaciado interno */
-    border: 1px solid #ddd; /* Borde suave */
-    border-radius: 5px; /* Bordes redondeados */
-    width: 100%;      /* Asegura que ocupe todo el ancho disponible */
-    box-sizing: border-box; /* Para incluir padding en el ancho total */
-    white-space: normal; /* Permite que el texto se expanda a varias líneas */
-    word-wrap: break-word; /* Rompe el texto si es demasiado largo */
-}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Estudio Posdoctoral</h1>
-        <!-- Formulario -->
-        <form action="guardar_posdoctoral.php" method="post">
-            <?php
-            // Generar identificador basado en el año y mes
-            $identificador_base = date('Y_m');
-            ?>
+        <div class="card-custom">
+            <div class="text-center mb-2">
+                <span class="badge-bono"><i class="fas fa-user-graduate mr-1"></i> Módulo de Bonificación</span>
+            </div>
+            <h2 class="mb-4 text-center" style="font-weight: 800; color: #1a2a3a;">
+                Estudio Posdoctoral
+            </h2>
 
-            <div class="row mb-3">
-                <!-- Identificador -->
-                <div class="col-md-6">
-                    <label for="identificador_base">Identificador:</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="identificador_base" name="identificador_base"
-                               value="<?php echo $identificador_base; ?>" maxlength="7" pattern="\d{4}_\d{2}" placeholder="Año_Mes" required>
-                        <select class="form-select form-select-sm" id="numero_envio" name="numero_envio" style="width: 50px;" required>
-                            <?php for ($i = 1; $i <= 9; $i++): ?>
-                                <option value="<?php echo $i; ?>" <?php echo $i == 1 ? 'selected' : ''; ?>><?php echo $i; ?></option>
-                            <?php endfor; ?>
-                        </select>
+            <form action="guardar_posdoctoral.php" method="post">
+                <?php $identificador_base = date('Y_m'); ?>
+
+                <div class="section-title">Información de Solicitud</div>
+                <div class="form-row align-items-end">
+                    <div class="form-group col-md-4">
+                        <label>Identificador:</label>
+                        <div class="input-group shadow-sm">
+                            <input type="text" class="form-control" id="identificador_base" name="identificador_base" 
+                                   value="<?php echo $identificador_base; ?>" maxlength="7" pattern="\d{4}_\d{2}" required>
+                            <div class="input-group-append">
+                                <select class="custom-select" name="numero_envio" style="max-width: 65px;">
+                                    <?php for ($i = 1; $i <= 9; $i++) echo "<option value='$i'>$i</option>"; ?>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label>Número de Oficio:</label>
+                        <input type="text" id="inputTrdFac" name="inputTrdFac" class="form-control shadow-sm" placeholder="Oficio TRD" required>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label>Documento Profesor:</label>
+                        <div class="input-group shadow-sm">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text bg-white"><i class="fas fa-id-card text-muted"></i></span>
+                            </div>
+                            <input type="text" id="documento_profesor" name="documento_profesor" class="form-control" oninput="buscarDatos(this)" placeholder="Cédula" required>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Número de Oficio -->
-                <div class="col-md-6">
-                    <label for="inputTrdFac">Número de oficio:</label>
-                    <input type="text" id="inputTrdFac" name="inputTrdFac" class="form-control" required>
-                </div>
-            </div>
-
-            <!-- Documento Profesor -->
-            <div class="row mb-3">
-                <div class="col-md-3">
-           <!-- Campo de entrada para el documento del profesor -->
-<label for="documento_profesor">Documento Profesor:</label>
-<input type="text" id="documento_profesor" name="documento_profesor" class="form-control" oninput="buscarDatos(this)" required>
-                  </div>       </div>
-             <div class="row mb-3">
+                <div class="form-row mb-4">
                     <div class="col-md-12">
- <label for="datos_profesor">Datos profesor:</label>
-<!-- Contenedor para mostrar los datos del profesor -->
-<div id="datos_profesor" class="datos-container"></div>
-                </div> </div>
-     
-
-            <!-- Contenedor para documentos -->
-
-            <!-- Campos adicionales -->
-            <div class="row mb-3">
-                <div class="col-md-4">
-                    <label for="producto">Título obtenido</label>
-                    <input type="text" class="form-control" name="producto" id="producto" placeholder="Ingrese el nombre del título">
+                        <div id="datos_profesor" class="datos-container shadow-sm">
+                            <span class="text-muted small"><i class="fas fa-info-circle mr-2"></i>Ingrese el documento para cargar los datos del docente.</span>
+                        </div>
+                    </div>
                 </div>
 
-            
-
-              
-            </div>
-
-            <!-- Institución Educativa, Fecha de Terminación, Resolución de Convalidación -->
-            <div class="row mb-3">
-                <div class="col-md-4">
-                    <label for="institucion">Institución Educativa:</label>
-                    <input type="text" class="form-control" name="institucion" id="institucion" placeholder="Ingrese la institución educativa">
+                <div class="section-title">Detalles del Estudio Posdoctoral</div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label>Título Obtenido / Certificación:</label>
+                        <input type="text" class="form-control shadow-sm" name="producto" id="producto" placeholder="Nombre de la certificación posdoctoral" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label>Institución Educativa:</label>
+                        <input type="text" class="form-control shadow-sm" name="institucion" id="institucion" placeholder="Universidad o Centro de Investigación" required>
+                    </div>
                 </div>
 
-                <div class="col-md-4">
-                    <label for="fecha_terminacion">Fecha de Terminación:</label>
-                    <input type="date" class="form-control" name="fecha_terminacion" id="fecha_terminacion" required>
+                <div class="form-row mb-3">
+                    <div class="form-group col-md-4">
+                        <label>Fecha de Terminación:</label>
+                        <input type="date" class="form-control shadow-sm" name="fecha_terminacion" id="fecha_terminacion" required>
+                    </div>
+                    <div class="form-group col-md-8 text-center">
+                        <label class="text-success fw-bold">Bonificación Asignada (Puntos)</label>
+                        <input type="number" class="form-control puntaje-destacado text-center shadow-sm mx-auto" id="puntaje" name="puntaje" step="0.01" min="0" readonly style="max-width: 250px;">
+                        <small class="text-muted">Valor fijo según normativa para estudios posdoctorales.</small>
+                    </div>
                 </div>
 
-               
-            </div>
-
-            <!-- Campo de Puntaje -->
-            <div class="row mb-3">
-                <div class="col-md-12">
-                    <label for="puntaje">Puntaje Total</label>
-                    <input type="number" class="form-control" id="puntaje" name="puntaje" step="0.01" min="0" required>
+                <hr class="mt-4">
+                <div class="d-flex justify-content-end align-items-center">
+                    <a href="index.php" class="btn btn-link text-muted mr-3">Cancelar</a>
+                    <button type="submit" class="btn btn-success px-5 shadow-sm fw-bold">
+                        <i class="fas fa-save mr-2"></i>Guardar Bonificación
+                    </button>
                 </div>
-            </div>
-
-            <!-- Botones -->
-            <div class="row">
-                <div class="col-md-12 text-right mt-3">
-                    <button type="submit" class="btn btn-primary">Enviar</button>
-                    <a href="index.php" class="btn btn-secondary">Volver</a>
-                </div>
-            </div>
-        </form>
+            </form>
+        </div>
     </div>
 
-    <!-- Scripts de Bootstrap y lógica para puntaje -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script>
+        // Establecer puntaje inicial (120 puntos fijos)
         function actualizarPuntaje() {
-            var puntaje = 0;
-
-                    puntaje = 120;
-                 
-
-            document.getElementById("puntaje").value = puntaje;
+            document.getElementById("puntaje").value = 120;
         }
 
-        // Llamar la función para establecer el puntaje inicial al cargar la página
-        actualizarPuntaje();
+        function buscarDatos(input) {
+            const documento = input.value.trim();
+            if (documento === '') return;
 
-        // Función para buscar los datos del profesor
-function buscarDatos(input) {
-    const documento = input.value.trim(); // Obtener el valor del input y quitar espacios al inicio y final
-    if (documento === '') return; // Si el campo está vacío, no hacer nada.
+            const datosContainer = document.getElementById('datos_profesor');
+            datosContainer.innerHTML = '<i class="fas fa-spinner fa-spin mr-2 text-success"></i>Buscando docente en el sistema...';
 
-    console.log(`Buscando datos para el documento: ${documento}`);
-    const datosContainer = document.getElementById('datos_profesor'); // Contenedor para mostrar los datos del profesor
-    datosContainer.textContent = 'Cargando...'; // Mostrar indicador de carga
+            fetch(`obtener_datos_profesor.php?documento=${documento}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        datosContainer.innerHTML = `<i class="fas fa-exclamation-circle text-danger mr-2"></i><span class="text-danger">${data.error}</span>`;
+                    } else {
+                        datosContainer.innerHTML = `<i class="fas fa-check-circle text-success mr-2"></i><strong>${data.nombre_completo}</strong> | ${data.nombre_depto} | ${data.nombre_fac}`;
+                        if (data.numero_oficio) {
+                            document.getElementById('inputTrdFac').value = data.numero_oficio;
+                        }
+                    }
+                })
+                .catch(() => {
+                    datosContainer.innerHTML = '<i class="fas fa-times-circle text-danger mr-2"></i>Error al cargar los datos';
+                });
+        }
 
-    // Hacer la solicitud al servidor
-    fetch(`obtener_datos_profesor.php?documento=${documento}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Error en la respuesta del servidor: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('Datos recibidos:', data); // Mostrar datos en consola para depuración
-            if (data.error) {
-                datosContainer.textContent = data.error; // Mostrar el error si no se encuentra el profesor
-            } else {
-                // Mostrar los datos del profesor en el contenedor junto al campo de documento
-                datosContainer.textContent = `${data.nombre_completo}, Depto: ${data.nombre_depto}, Fac.: ${data.nombre_fac}`;
-
-                // Prellenar el campo "Número de oficio" si existe el número de oficio en los datos
-                if (data.numero_oficio) {
-                    const numeroOficioInput = document.getElementById('inputTrdFac');
-                    numeroOficioInput.value = data.numero_oficio;
-                    console.log(`Número de oficio prellenado: ${data.numero_oficio}`);
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Error en la solicitud fetch:', error);
-            datosContainer.textContent = 'Error al cargar los datos';
-        });
-}
-
-
-
+        window.onload = actualizarPuntaje;
     </script>
 </body>
 </html>

@@ -1,342 +1,477 @@
-    <?php
-    // Incluir el archivo de conexión
-    include_once('conn.php'); // Asegúrate de que la ruta sea correcta
+<?php
+// Incluir el archivo de conexión
+include_once('conn.php'); 
 
-    // Obtener los filtros desde el formulario (si existen)
-    $identificador = isset($_POST['identificador']) ? $_POST['identificador'] : null;
-    $numero_oficio = isset($_POST['numero_oficio']) ? $_POST['numero_oficio'] : null;
+// Obtener los filtros desde el formulario (si existen)
+$identificador = isset($_POST['identificador']) ? $_POST['identificador'] : null;
+$numero_oficio = isset($_POST['numero_oficio']) ? $_POST['numero_oficio'] : null;
 
-    // Consulta SQL
- $sql = "
+// Consulta SQL con LEFT JOIN, manejo seguro de NULLs y columnas de resolución incluidas
+$sql = "
     SELECT 
-    p.id AS id,
-    p.identificador AS identificador,
-    p.numero_oficio AS numero_oficio,
-    p.documento_profesor AS documento_profesor,
-    p.titulo_obtenido AS titulo_obtenido,
-    p.institucion AS institucion,
-    p.fecha_terminacion AS fecha_terminacion,
-    p.puntaje AS puntaje,
-    p.tipo_productividad AS tipo_productividad,
-    
-    -- Facultad y Departamento
-    f.nombre_fac_min AS facultad,
-    d.depto_nom_propio AS departamento,
-    
-    -- Concatenar los detalles de los profesores
-    GROUP_CONCAT(
-        DISTINCT CONCAT(ter.nombre_completo, ' c.c ', ter.documento_tercero)
-        ORDER BY ter.documento_tercero
-        SEPARATOR '\n'
-    ) AS detalles_profesores
+        p.id AS id,
+        p.identificador AS identificador,
+        p.numero_oficio AS numero_oficio,
+        p.documento_profesor AS documento_profesor,
+        p.titulo_obtenido AS titulo_obtenido,
+        p.institucion AS institucion,
+        p.fecha_terminacion AS fecha_terminacion,
+        p.puntaje AS puntaje,
+        p.tipo_productividad AS tipo_productividad,
+        p.estado AS estado,
+        p.num_resolucion,
+        p.fecha_resolucion,
+        p.nombre_vicerrector,
+        p.genero_vicerrector,
+        p.nombre_reviso,
+        p.nombre_elaboro,
+        
+        -- Facultad y Departamento
+        MAX(f.nombre_fac_min) AS facultad,
+        MAX(d.depto_nom_propio) AS departamento,
+        
+        -- Concatenar los detalles de los profesores
+        GROUP_CONCAT(
+            DISTINCT CONCAT(ter.nombre_completo, ' c.c ', ter.documento_tercero)
+            ORDER BY ter.documento_tercero
+            SEPARATOR '\n'
+        ) AS detalles_profesores
+    FROM 
+        posdoctoral p
+    LEFT JOIN 
+        posdoctoral_profesor pp ON pp.id_titulo = p.id
+    LEFT JOIN 
+        tercero ter ON pp.fk_tercero = ter.documento_tercero
+    LEFT JOIN 
+        deparmanentos d ON ter.fk_depto = d.PK_DEPTO
+    LEFT JOIN 
+        facultad f ON d.FK_FAC = f.PK_FAC
+    WHERE 1 = 1";
 
-FROM 
-    posdoctoral p
-JOIN 
-    posdoctoral_profesor pp ON pp.id_titulo = p.id
-JOIN 
-    tercero ter ON pp.fk_tercero = ter.documento_tercero
-JOIN 
-    deparmanentos d ON ter.fk_depto = d.PK_DEPTO
-JOIN 
-    facultad f ON d.FK_FAC = f.PK_FAC
-
-WHERE 1 = 1
-
-";
 // Añadir condiciones según los filtros
-if (!empty($identificador_completo)) {
-    $sql .= " AND cb.identificador = '" . $conn->real_escape_string($identificador_completo) . "'";
+if (!empty($identificador)) {
+    $sql .= " AND p.identificador = '" . $conn->real_escape_string($identificador) . "'";
 }
-if (!empty($numeroOficio)) {
-    $sql .= " AND cb.numero_oficio = '" . $conn->real_escape_string($numeroOficio) . "'";
+if (!empty($numero_oficio)) {
+    $sql .= " AND p.numero_oficio = '" . $conn->real_escape_string($numero_oficio) . "'";
 }
+
+// Agrupar para evitar error ONLY_FULL_GROUP_BY
 $sql .= " 
- 
-GROUP BY 
-    p.id, p.identificador, p.numero_oficio, p.documento_profesor, 
-    p.titulo_obtenido, p.institucion, p.fecha_terminacion, 
-    p.puntaje, p.tipo_productividad, f.nombre_fac_min, d.depto_nom_propio
-
-ORDER BY 
-    p.fecha_terminacion;
-   
+    GROUP BY 
+        p.id, p.identificador, p.numero_oficio, p.documento_profesor, 
+        p.titulo_obtenido, p.institucion, p.fecha_terminacion, p.puntaje, 
+        p.tipo_productividad, p.estado, p.num_resolucion, p.fecha_resolucion, 
+        p.nombre_vicerrector, p.genero_vicerrector, p.nombre_reviso, p.nombre_elaboro
+    ORDER BY 
+        p.id DESC;
 ";
-    // Ejecutar la consulta
-    $result = $conn->query($sql);
 
-    // Realizar la consulta para obtener los identificadores de título
-    $identificadores_result = $conn->query("SELECT DISTINCT identificador FROM posdoctoral");
+// Ejecutar la consulta
+$result = $conn->query($sql);
+
+if (!$result) {
+    echo "<div class='alert alert-danger m-3'>Error SQL en Posdoctoral Bonificación: " . $conn->error . "</div>";
+}
+
+// Obtener los identificadores y extraer años para modales
+$identificadores_result = $conn->query("SELECT DISTINCT identificador FROM posdoctoral WHERE identificador IS NOT NULL ORDER BY identificador DESC");
 $identificadores = [];
+$unique_years = [];
 
+if ($identificadores_result) {
     while ($row = $identificadores_result->fetch_assoc()) {
-        $identificadores[] = $row;
-    }
-
-
-    // Crear un array para almacenar los datos
-    $data = array();
-
-    if ($result->num_rows > 0) {
-        while($row = $result->fetch_assoc()) {
-            $data[] = $row;
+        $id_str = $row['identificador'];
+        $identificadores[] = $id_str;
+        
+        $year = substr($id_str, 0, 4);
+        if (!empty($year) && is_numeric($year) && !in_array($year, $unique_years)) {
+            $unique_years[] = $year;
         }
     }
+    rsort($unique_years); // Ordenar años de mayor a menor
+}
 
-    // Cerrar la conexión
-   // $conn->close();
-    ?>
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>estudios posdoctorales</title>
-        <!-- Incluir los archivos CSS de DataTables -->
+// Obtener los últimos 6 lotes para el carrusel
+$ultimos_lotes_result = $conn->query("SELECT DISTINCT identificador FROM posdoctoral WHERE identificador IS NOT NULL AND identificador != '' ORDER BY identificador DESC LIMIT 6");
+$ultimos_lotes = [];
+if ($ultimos_lotes_result) {
+    while ($row = $ultimos_lotes_result->fetch_assoc()) {
+        $ultimos_lotes[] = $row['identificador'];
+    }
+}
+?>
 
-       <!-- Incluir Bootstrap CSS -->
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+    /* ESTILOS INTERNOS DEL MÓDULO (Alta Densidad) */
+    .page-header-inner { margin-bottom: 1.2rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.8rem; }
+    .page-title-inner { font-weight: 700; color: #0f172a; font-size: 1.4rem; letter-spacing: -0.5px; margin: 0; }
+    .page-subtitle-inner { color: #10b981; font-size: 0.85rem; margin-top: 2px; font-weight: 600; }
 
-        <!-- Incluir jQuery -->
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    .btn-modern {
+        font-weight: 600; border-radius: 8px; padding: 0.4rem 0.9rem; font-size: 0.8rem;
+        transition: all 0.2s ease; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    }
+    .btn-m-xls { background: #f0fdf4; color: #059669; border-color: #bbf7d0; }
+    .btn-m-xls:hover { background: #059669; color: white; }
+    .btn-m-cuadros { background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; }
+    .btn-m-cuadros:hover { background: #4f46e5; color: white; }
+    .btn-m-res { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+    .btn-m-res:hover { background: #2563eb; color: white; }
 
-        <!-- Incluir los estilos de DataTables -->
-        <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.12.1/css/jquery.dataTables.min.css">
+    .status-pill {
+        display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px;
+        font-size: 0.65rem; font-weight: 600; background-color: #f8fafc; border: 1px solid #e2e8f0;
+        color: #475569; white-space: nowrap; letter-spacing: 0.2px;
+    }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .status-anulado { background-color: transparent; border-color: transparent; color: #94a3b8; text-decoration: line-through; padding-left: 0; }
 
-        <!-- Incluir los scripts de DataTables -->
-        <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>    <script src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
-        <script src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.html5.min.js"></script>    <!-- Estilos personalizados -->
-        <style>
-             .modal {
-                display: none;
-                position: fixed;
-                z-index: 1;
-                left: 0;
-                top: 0;
-                width: 100%;
-                height: 100%;
-                overflow: auto;
-                background-color: rgba(0, 0, 0, 0.4);
-                padding-top: 60px;
-            }
+    #posdoctoralTable { margin-bottom: 0 !important; width: 100% !important; }
+    #posdoctoralTable thead th { background-color: #f8fafc; color: #475569; border-bottom: 2px solid #e2e8f0; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; padding: 6px 8px; text-transform: uppercase; }
+    #posdoctoralTable tbody td { vertical-align: middle; font-size: 0.78rem; color: #334155; border-bottom: 1px solid #f1f5f9; padding: 3px 8px !important; line-height: 1.15; }
+    
+    .text-truncate-custom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
+    .btn-action { border-radius: 4px; padding: 2px 6px !important; font-size: 0.75rem; margin: 0 1px; }
+    
+    .quick-audit-section { background: #f8fafc; border-radius: 12px; padding: 1rem 1.5rem; margin-top: 2rem; border: 1px dashed #cbd5e1; }
+    .quick-audit-title { font-size: 0.8rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+    .lotes-carousel { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+    .lotes-carousel::-webkit-scrollbar { height: 4px; }
+    .lotes-carousel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .lote-card { background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; color: #334155; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: all 0.2s ease; }
+    .lote-card:hover { border-color: #10b981; background-color: #ecfdf5; color: #047857; }
 
-            .modal-content {
-                background-color: #fefefe;
-                margin: 5% auto;
-                padding: 20px;
-                border: 1px solid #888;
-                width: 60%;
-                max-width: 600px;
-            }
+    /* MODALES MÓDULO */
+    .modal-posdoctoral-bon { display: none; position: fixed; z-index: 1050; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(15, 23, 42, 0.4); backdrop-filter: blur(6px); padding-top: 6vh; }
+    .modal-content-posdoctoral-bon { background-color: #ffffff; margin: auto; padding: 2rem; border: 1px solid rgba(255,255,255,0.2); width: 90%; max-width: 600px; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes modalFadeIn { from { opacity: 0; transform: translateY(-30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .close-modal { color: #94a3b8; float: right; font-size: 24px; font-weight: bold; line-height: 1; transition: color 0.2s; cursor: pointer; background: #f1f5f9; width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; border-radius: 50%; }
+    .close-modal:hover { color: #0f172a; background: #e2e8f0; }
+    .modal-content-posdoctoral-bon .form-control, .modal-content-posdoctoral-bon .form-select { border-radius: 8px; border: 1px solid #cbd5e1; padding: 0.6rem 1rem; font-size: 0.9rem; }
+    .modal-content-posdoctoral-bon .form-control:focus, .modal-content-posdoctoral-bon .form-select:focus { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); }
+</style>
 
-            .close {
-                color: #aaa;
-                float: right;
-                font-size: 28px;
-                font-weight: bold;
-            }
-
-            .close:hover,
-            .close:focus {
-                color: black;
-                text-decoration: none;
-                cursor: pointer;
-            }
-
-            table {
-                width: 100%;
-                border-collapse: collapse;
-            }
-            th, td {
-                padding: 8px;
-                text-align: center;
-                border: 1px solid #ddd;
-            }
-            th {
-                background-color: #004080;
-                color: white;
-            }
-            tr:nth-child(even) {
-                background-color: #f2f2f2;
-            }
-        </style>
-    </head>
-    <body><div class="container-fluid mt-4">
-
-        <h1>Lista de Estudios posdoctorales(bonificación)</h1>
-
-
-        <!-- Botones de acciones -->
-        <div class="mb-3">
-        <button id="openModalpdb" class="btn btn-primary">Generar XLS</button>
-            <button id="openModalCuadrospdb" class="btn btn-secondary">Generar Cuadros</button>
+<div class="module-wrapper">
+    
+    <div class="page-header-inner d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <h1 class="page-title-inner">Estudios Posdoctorales</h1>
+            <p class="page-subtitle-inner"><i class="fas fa-gift me-1"></i> Módulo de Bonificación Académica</p>
         </div>
-   <table id="posdoctoralTable" class="table-striped">
-    <thead>
-        <tr>      <th>Facultad</th>
-      <th>Departamento</th>
-            <th>identificador</th>
-            <th>Número de Oficio</th>
-            <th>Profesores</th>
-            <th>Título Obtenido</th>
-            <th>Institución</th>
-            <th>Fecha de Terminación</th>
-            <th>Puntaje</th>
-      
-            <th>Acciones</th>
-        </tr>
-    </thead>
-    <tbody>
-        <?php foreach ($data as $row): ?>
-            <tr>  <td title="<?php echo $row['facultad']; ?>">
-    <?php
-        // Eliminar "Facultad de " del texto
-        $facultad = str_replace("Facultad de ", "", $row['facultad']);
-        // Mostrar solo los primeros 15 caracteres
-        echo substr($facultad, 0, 15) . (strlen($facultad) > 15 ? '...' : '');
-    ?>
-</td>
-<td title="<?php echo $row['departamento']; ?>">
-    <?php
-        // Mostrar solo los primeros 15 caracteres del departamento
-        $departamento = $row['departamento'];
-        echo substr($departamento, 0, 15) . (strlen($departamento) > 15 ? '...' : '');
-    ?>
-</td>
-                <td><?php echo $row['identificador']; ?></td>
-                <td><?php echo $row['numero_oficio']; ?></td>
-                                <td><?php echo nl2br($row['detalles_profesores']); ?></td>
+        
+        <div class="d-flex gap-2 flex-wrap">
+            <button id="openModalpdb" class="btn-modern btn-m-xls">
+                <i class="fas fa-file-excel"></i> Exportar XLS
+            </button>
+            <button id="openModalCuadrospdb" class="btn-modern btn-m-cuadros">
+                <i class="fas fa-table"></i> Generar Cuadros
+            </button>
+            <button id="openModalResolucionespdb" class="btn-modern btn-m-res">
+                <i class="fas fa-file-signature"></i> Resoluciones
+            </button>
+        </div>
+    </div>
 
-
-                <td><?php echo $row['titulo_obtenido']; ?></td>
-                <td><?php echo $row['institucion']; ?></td>
-                <td><?php echo $row['fecha_terminacion']; ?></td>
-                <td><?php echo $row['puntaje']; ?></td>
-              
-                <td>
-                    <!-- Botones fuera de los echo de la tabla -->
-                    <button class="edit-btn btn btn-warning btn-sm" data-id="<?php echo $row['id']; ?>">Editar</button>
-                    <button class="delete-btn btn btn-danger btn-sm" data-id="<?php echo $row['id']; ?>">Eliminar</button>
-                </td>
-            </tr>
-        <?php endforeach; ?>
-    </tbody>
-</table>
-  <!-- Modal para exportar a Excel -->
-<div id="modalpdb" class="modal">
-    <div class="modal-content">
-        <span class="close">&times;</span>
-        <h2>Filtrar por Solicitud o Año</h2>
-        <form action="report_posdoctoral.php" method="GET">
-            <label for="identificador_solicitud">Identificador de Solicitud:</label>
-            <select name="identificador_solicitud" id="identificador_solicitud" class="form-control">
-                <option value="">Selecciona un identificador</option>
+    <div class="table-responsive">
+        <table id="posdoctoralTable" class="table table-hover align-middle" data-order='[[ 0, "desc" ]]' style="width:100%">
+            <thead>
+                <tr> 
+                    <th class="text-center" style="width: 4%">ID</th>
+                    <th style="width: 8%">IDENTIF.</th>
+                    <th style="width: 12%">DEPTO.</th>
+                    <th style="width: 14%">PROFESORES</th>
+                    <th style="width: 18%">TÍTULO OBTENIDO</th>
+                    <th style="width: 14%">INSTITUCIÓN</th>
+                    <th style="width: 10%">FECHA TERM.</th>
+                    <th class="text-center" style="width: 5%">PTS</th>
+                    <th style="width: 8%">ESTADO</th>
+                    <th class="text-center" style="width: 7%">ACCIONES</th>
+                </tr>
+            </thead>
+            <tbody>
                 <?php
-                foreach ($identificadores as $row_ident) {
-                    echo '<option value="' . htmlspecialchars($row_ident['identificador']) . '">' . htmlspecialchars($row_ident['identificador']) . '</option>';
+                if ($result && $result->num_rows > 0) {
+                    while ($row = $result->fetch_assoc()) {
+                        
+                        $facultad_raw = $row['facultad'] ?? '';
+                        $facultad = str_replace("Facultad de ", "", $facultad_raw);
+                        $departamento = $row['departamento'] ?? 'SIN ASIGNAR';
+                        $nombres = !empty($row['detalles_profesores']) ? $row['detalles_profesores'] : 'Sin Profesores';
+                        $titulo = $row['titulo_obtenido'] ?? 'N/A';
+                        $institucion = $row['institucion'] ?? 'N/A';
+                        
+                        // ESTADOS CON MANEJO DE NULL (Los NULL viejos se muestran como ACTIVO)
+                        $estadoOriginal = strtolower(trim($row['estado'] ?? ''));
+                        
+                        if ($estadoOriginal === '' || strpos($estadoOriginal, 'ac') !== false || strpos($estadoOriginal, 'aprobado') !== false) {
+                            $dotColor = 'bg-success'; 
+                            $estadoTexto = 'ACTIVO';
+                            $htmlEstado = '<span class="status-pill"><span class="status-dot ' . $dotColor . '"></span>' . $estadoTexto . '</span>';
+                        }
+                        elseif (strpos($estadoOriginal, 'an') !== false || strpos($estadoOriginal, 'anulado') !== false) {
+                            $estadoTexto = 'ANULADO';
+                            $htmlEstado = '<span class="status-pill status-anulado"><span class="status-dot bg-secondary"></span>' . $estadoTexto . '</span>';
+                        }
+                        elseif (strpos($estadoOriginal, 're') !== false || strpos($estadoOriginal, 'rechazado') !== false) {
+                            $dotColor = 'bg-danger';
+                            $estadoTexto = strtoupper($estadoOriginal);
+                            $htmlEstado = '<span class="status-pill"><span class="status-dot ' . $dotColor . '"></span>' . $estadoTexto . '</span>';
+                        }
+                        elseif (strpos($estadoOriginal, 'pe') !== false || strpos($estadoOriginal, 'pendiente') !== false) {
+                            $dotColor = 'bg-warning';
+                            $estadoTexto = strtoupper($estadoOriginal);
+                            $htmlEstado = '<span class="status-pill"><span class="status-dot ' . $dotColor . '"></span>' . $estadoTexto . '</span>';
+                        } else {
+                            $htmlEstado = '<span class="status-pill"><span class="status-dot bg-secondary"></span>' . strtoupper($estadoOriginal) . '</span>';
+                        }
+
+                        echo '<tr>';
+                        echo '<td class="text-center fw-bold text-success">' . htmlspecialchars($row['id']) . '</td>';
+                        echo '<td><span class="badge bg-light text-secondary border px-1">' . htmlspecialchars($row['identificador']) . '</span></td>';
+                        echo '<td><div class="text-truncate-custom fw-medium text-dark" style="max-width: 120px;" title="Facultad: ' . htmlspecialchars($facultad) . '">' . htmlspecialchars($departamento) . '</div></td>';
+                        echo '<td><div class="text-truncate-custom" style="max-width: 140px;" title="' . htmlspecialchars($nombres) . '">' . htmlspecialchars(substr($nombres, 0, 30)) . (strlen($nombres) > 30 ? '...' : '') . '</div></td>';
+                        echo '<td><div class="text-truncate-custom" style="max-width: 180px;" title="' . htmlspecialchars($titulo) . '">' . htmlspecialchars($titulo) . '</div></td>';
+                        echo '<td><div class="text-truncate-custom" style="max-width: 140px;" title="' . htmlspecialchars($institucion) . '">' . htmlspecialchars($institucion) . '</div></td>';
+                        echo '<td>' . htmlspecialchars($row['fecha_terminacion']) . '</td>';
+                        
+                        echo '<td class="text-center fw-bold text-success">' . htmlspecialchars($row['puntaje']) . '</td>';
+                        echo '<td>' . $htmlEstado . '</td>';
+                        
+                        echo '<td class="text-center text-nowrap">';
+                        echo '<a href="editar_posdoctoral_bon.php?id=' . $row['id'] . '" class="btn btn-light border btn-action text-primary shadow-sm" title="Editar"><i class="fas fa-pen"></i></a> ';
+                        echo '<button class="btn btn-light border btn-action text-danger shadow-sm" onclick="confirmDeletePosdoctoralBon(' . $row['id'] . ')" title="Eliminar"><i class="fas fa-trash-alt"></i></button>';
+                        echo '</td>';
+                        echo '</tr>';
+                    }
                 }
                 ?>
-            </select>
-            <br><br>
-            <label for="ano">Año:</label>
-            <input type="number" name="ano" id="ano" class="form-control">
-            <br><br>
-            <input type="submit" value="Generar Reporte" class="btn btn-primary">
+            </tbody>
+        </table>
+    </div>
+
+    <div class="quick-audit-section">
+        <div class="quick-audit-title">
+            <i class="fas fa-folder-tree text-secondary me-1"></i> Auditoría Rápida de Lotes (Bonificación - Posdoctoral)
+        </div>
+        <div class="lotes-carousel">
+            <?php foreach($ultimos_lotes as $lote): ?>
+                <a href="auditoria_lote_bon.php?lote=<?php echo urlencode($lote); ?>" class="lote-card" title="Ver lote: <?php echo htmlspecialchars($lote); ?>">
+                    <i class="fas fa-user-graduate text-success"></i> <?php echo htmlspecialchars($lote); ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+
+</div>
+
+<div id="modalpdb" class="modal-posdoctoral-bon">
+    <div class="modal-content-posdoctoral-bon">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+             <h4 class="fw-bold text-success m-0"><i class="fas fa-file-excel me-2"></i>Reporte XLS (Bonificación)</h4>
+             <span class="close-modal" onclick="$(this).closest('.modal-posdoctoral-bon').fadeOut(200);">&times;</span>
+        </div>
+        <form action="report_posdoctoral.php" method="GET">
+            <div class="mb-3">
+                <label for="ano_xls_pdb" class="form-label text-secondary fw-semibold">Año:</label>
+                <select name="ano" id="ano_xls_pdb" class="form-select">
+                    <option value="">Todos los años...</option>
+                    <?php foreach($unique_years as $y) echo "<option value='$y'>$y</option>"; ?>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label for="identificador_solicitud_pdb" class="form-label text-secondary fw-semibold">Identificador de Solicitud:</label>
+                <select name="identificador_solicitud" id="identificador_solicitud_pdb" class="form-select">
+                    <option value="">Todos los paquetes...</option>
+                    <?php
+                    foreach ($identificadores as $id) {
+                        echo '<option value="' . htmlspecialchars($id) . '" data-ano="' . substr($id, 0, 4) . '">' . htmlspecialchars($id) . '</option>';
+                    }
+                    ?>
+                </select>
+            </div>
+            <div class="d-grid">
+                <button type="submit" class="btn btn-success btn-lg shadow-sm rounded-3"><i class="fas fa-download me-2"></i>Generar Reporte</button>
+            </div>
         </form>
     </div>
 </div>
 
-    <!-- Modal para ver cuadros -->
-    <div id="modalCuadrospdb" class="modal">
-        <div class="modal-content">
-            <span class="close close-cuadros">&times;</span>
-            <h2>Filtrar para Generar Cuadros</h2>
-            <form action="cuadros_posdoctoral.php" method="GET">
-                <label for="cuadro_identificador_solicitud">Identificador de Solicitud:</label>
-                <select name="cuadro_identificador_solicitud" id="cuadro_identificador_solicitud" class="form-control">
-                    <option value="">Selecciona un identificador</option>
+<div id="modalCuadrospdb" class="modal-posdoctoral-bon">
+    <div class="modal-content-posdoctoral-bon">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+             <h4 class="fw-bold text-primary m-0"><i class="fas fa-table me-2"></i>Generar Cuadros (Bonificación)</h4>
+             <span class="close-modal" onclick="$(this).closest('.modal-posdoctoral-bon').fadeOut(200);">&times;</span>
+        </div>
+        <form action="cuadros_posdoctoral.php" method="GET">
+            <div class="mb-3">
+                <label for="ano_cuadros_pdb" class="form-label text-secondary fw-semibold">Año:</label>
+                <select name="cuadro_ano" id="ano_cuadros_pdb" class="form-select">
+                    <option value="">Todos los años...</option>
+                    <?php foreach($unique_years as $y) echo "<option value='$y'>$y</option>"; ?>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label for="cuadro_identificador_solicitud_pdb" class="form-label text-secondary fw-semibold">Identificador de Solicitud:</label>
+                <select name="cuadro_identificador_solicitud" id="cuadro_identificador_solicitud_pdb" class="form-select">
+                    <option value="">Todos los paquetes...</option>
                     <?php
-                    foreach ($identificadores as $row_ident_cuadro) {
-                        echo '<option value="' . htmlspecialchars($row_ident_cuadro['identificador']) . '">' . htmlspecialchars($row_ident_cuadro['identificador']) . '</option>';
+                    foreach ($identificadores as $id) {
+                        echo '<option value="' . htmlspecialchars($id) . '" data-ano="' . substr($id, 0, 4) . '">' . htmlspecialchars($id) . '</option>';
                     }
                     ?>
                 </select>
-                <br><br>
-                <label for="cuadro_ano">Año:</label>
-                <input type="number" name="cuadro_ano" id="cuadro_ano" class="form-control">
-                <br><br>
-                <input type="submit" value="Generar Cuadro" class="btn btn-secondary">
-            </form>
-        </div>
+            </div>
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary btn-lg shadow-sm rounded-3"><i class="fas fa-file-alt me-2"></i>Generar Cuadro</button>
+            </div>
+        </form>
     </div>
+</div>
 
+<div id="modalResolucionespdb" class="modal-posdoctoral-bon">
+    <div class="modal-content-posdoctoral-bon" style="max-width: 650px;">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+             <h4 class="fw-bold text-info m-0" style="color: #0284c7 !important;"><i class="fas fa-file-word me-2"></i>Resoluciones Bonificación</h4>
+             <span class="close-modal" onclick="$(this).closest('.modal-posdoctoral-bon').fadeOut(200);">&times;</span>
         </div>
+        <form action="resoluciones_posdoctoral.php" method="GET">
+            <div class="row bg-light p-3 mb-4 border rounded-3 mx-0">
+                <div class="col-md-6 mb-2">
+                    <label for="ano_res_pdb" class="form-label text-secondary fw-semibold">Filtro por Año:</label>
+                    <select id="ano_res_pdb" class="form-select">
+                        <option value="">Seleccione un año...</option>
+                        <?php foreach($unique_years as $y) echo "<option value='$y'>$y</option>"; ?>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-2">
+                    <label for="cuadro_identificador_pdb" class="form-label text-secondary fw-semibold">Identificador (Paquete):</label>
+                    <select name="cuadro_identificador_solicitud" id="cuadro_identificador_pdb" class="form-select" required>
+                        <option value="">Selecciona un paquete</option>
+                        <?php
+                        foreach ($identificadores as $id) {
+                            echo '<option value="' . htmlspecialchars($id) . '" data-ano="' . substr($id, 0, 4) . '">' . htmlspecialchars($id) . '</option>';
+                        }
+                        ?>
+                    </select>
+                </div>
+            </div>
 
-        <!-- Incluir los archivos JS de jQuery y DataTables -->
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-        <script src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
+            <h6 class="mb-3 text-secondary border-bottom pb-2 fw-bold">Datos de la Resolución (Opcionales)</h6>
+            <div class="row px-2">
+                <div class="col-md-6 mb-3">
+                    <label for="num_resolucion" class="form-label text-muted">Número de resolución:</label>
+                    <input type="text" name="num_resolucion" class="form-control" placeholder="Ej: 045">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="fecha_resolucion" class="form-label text-muted">Fecha de la resolución:</label>
+                    <input type="date" name="fecha_resolucion" class="form-control">
+                </div>
+            </div>
+            
+            <div class="row px-2">
+                <div class="col-md-8 mb-3">
+                    <label for="nombre_vicerrector" class="form-label text-muted">Firma (Vicerrector/a):</label>
+                    <input type="text" name="nombre_vicerrector" class="form-control" value="AIDA PATRICIA GONZÁLEZ NIEVA" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="genero_vicerrector" class="form-label text-muted">Género:</label>
+                    <select name="genero_vicerrector" class="form-select" required>
+                        <option value="F">Femenino</option>
+                        <option value="M">Masculino</option>
+                    </select>
+                </div>
+            </div>
 
-        <script>
+            <div class="row px-2">
+                <div class="col-md-6 mb-4">
+                    <label for="nombre_reviso" class="form-label text-muted">Revisó:</label>
+                    <input type="text" name="nombre_reviso" class="form-control" value="Marjhory Castro" required>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <label for="nombre_elaboro" class="form-label text-muted">Elaboró:</label>
+                    <input type="text" name="nombre_elaboro" class="form-control" value="Elizete Rivera" required>
+                </div>
+            </div>
+
+            <div class="d-grid mt-2">
+                <button type="submit" class="btn btn-info text-white btn-lg shadow-sm rounded-3" style="background-color: #0ea5e9; border-color: #0ea5e9;"><i class="fas fa-file-word me-2"></i>Generar Word</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // IIFE protector para esperar a jQuery y no romper index.php
+    (function() {
+        function initPosdoctoralBonModule() {
+            
+            // Función de filtro global
+            window.applyYearFilterPosBon = function(yearSelectId, idSelectId) {
+                var year = $('#' + yearSelectId).val();
+                $('#' + idSelectId + ' option').each(function() {
+                    if ($(this).val() === "") return; 
+                    if (year === "" || $(this).data('ano').toString() === year) {
+                        $(this).show().prop('disabled', false);
+                    } else {
+                        $(this).hide().prop('disabled', true);
+                    }
+                });
+                $('#' + idSelectId).val(''); 
+            };
+
+            // Anulación
+            window.confirmDeletePosdoctoralBon = function(id) {
+                if (confirm("¿Estás seguro de que quieres eliminar esta solicitud de posdoctorado?")) {
+                    const motivo = prompt("Por favor, indique el motivo de la anulación:");
+                    if (motivo && motivo.trim() !== "") {
+                        window.location.href = 'eliminar_posdoctoral_bon.php?id=' + id + '&motivo=' + encodeURIComponent(motivo);
+                    } else {
+                        alert("El motivo de la anulación es obligatorio para continuar.");
+                    }
+                }
+            };
+
             $(document).ready(function() {
-            // Inicializar DataTable
-            $('#posdoctoralTable').DataTable({
-                responsive: true, // Hace la tabla responsive
+                // Control de Modales
+                $('#openModalpdb').on('click', function() { $('#modalpdb').fadeIn(200); });
+                $('#openModalCuadrospdb').on('click', function() { $('#modalCuadrospdb').fadeIn(200); });
+                $('#openModalResolucionespdb').on('click', function() { $('#modalResolucionespdb').fadeIn(200); }); 
+                
+                // Cerrar haciendo clic fuera
+                $(window).on('click', function(event) {
+                    if ($(event.target).hasClass("modal-posdoctoral-bon")) {
+                        $(event.target).fadeOut(200);
+                    }
+                });
 
+                // Inicializar DataTables
+                if (!$.fn.DataTable.isDataTable('#posdoctoralTable')) {
+                    $('#posdoctoralTable').DataTable({
+                        responsive: true,
+                        dom: 'Bfrtip',
+                        buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+                        language: { url: '//cdn.datatables.net/plug-ins/2.0.0/i18n/es-ES.json' }
+                    });
+                }
 
-        dom: 'Bfrtip', // Incluye los botones de exportación
-        buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
-        language: {
-            url: 'https://cdn.datatables.net/plug-ins/1.12.1/i18n/Spanish.json'
+                // Eventos de filtro
+                $('#ano_xls_pdb').on('change', function() { applyYearFilterPosBon('ano_xls_pdb', 'identificador_solicitud_pdb'); });
+                $('#ano_cuadros_pdb').on('change', function() { applyYearFilterPosBon('ano_cuadros_pdb', 'cuadro_identificador_solicitud_pdb'); });
+                $('#ano_res_pdb').on('change', function() { applyYearFilterPosBon('ano_res_pdb', 'cuadro_identificador_pdb'); });
+            });
         }
-            });
 
-            // Abrir el modal para generar XLS
-            $("#openModalpdb").click(function() {
-                $("#modalpdb").css("display", "block");
-            });
-
-            // Abrir el modal para generar Cuadros
-            $("#openModalCuadrospdb").click(function() {
-                $("#modalCuadrospdb").css("display", "block");
-            });
-
-            // Cerrar los modales
-            $(".close").click(function() {
-                $("#modalpdb").css("display", "none");
-            });
-
-            $(".close-cuadros").click(function() {
-                $("#modalCuadrospdb").css("display", "none");
-            });
-
-            // Cerrar los modales si se hace clic fuera de ellos
-            $(window).click(function(event) {
-                if ($(event.target).is("#modalpdb")) {
-                    $("#modalpdb").css("display", "none");
+        // Esperar por jQuery
+        if (window.jQuery) {
+            initPosdoctoralBonModule();
+        } else {
+            var checkInterval = setInterval(function() {
+                if (window.jQuery) {
+                    clearInterval(checkInterval);
+                    initPosdoctoralBonModule();
                 }
-                if ($(event.target).is("#modalCuadrospdb")) {
-                    $("#modalCuadrospdb").css("display", "none");
-                }
-            });
-
-            // Acciones de editar y eliminar
-            $(".edit-btn").click(function() {
-                var id = $(this).data("id");
-                alert("Editar solicitud con ID: " + id);
-            });
-
-            $(".delete-btn").click(function() {
-                var id = $(this).data("id");
-                var confirmDelete = confirm("¿Seguro que quieres eliminar esta solicitud?");
-                if (confirmDelete) {
-                    alert("Eliminar solicitud con ID: " + id);
-                }
-            });
-        });
-        </script>
-
-    <!-- Incluir Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    </body>
-    </html>
+            }, 10);
+        }
+    })();
+</script>

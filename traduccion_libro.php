@@ -2,142 +2,128 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Traducción Libros</title>
-    <!-- Enlace al CDN de Bootstrap -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traducción de Libros | CIARP</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
-        /* Estilos personalizados */
-        body {
-            background-color: #f8f9fa;
-        }
-        .container {
+        body { background-color: #f4f7f6; color: #4a4a4a; }
+        .card-custom {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
             background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             padding: 30px;
-            max-width: 800px;
             margin-top: 30px;
+            margin-bottom: 50px;
         }
-        h1 {
-            font-weight: 600;
-            color: #343a40;
-            text-align: center;
-        }
-        label {
-            font-weight: bold;
-            color: #495057;
-        }
-        .input-group, .form-control {
-            border-radius: 6px;
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #2c3e50;
+            border-bottom: 2px solid #eef2f7;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            margin-top: 20px;
         }
         #contenedor_documentos {
-            background-color: #f0f4f8;
-            padding: 15px;
-            border-radius: 6px;
+            background-color: #f8fafd;
+            border-radius: 10px;
+            border-left: 5px solid #007bff;
+            transition: all 0.3s ease;
         }
-        .datos-container {
-            font-style: italic;
-            color: #6c757d;
+        .form-control:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.1);
         }
-        .btn-primary, .btn-secondary {
-            border-radius: 6px;
-        }
-        .custom-select {
-            border-radius: 6px;
+        label { font-size: 0.85rem; margin-bottom: 0.4rem; font-weight: 600; }
+        .puntaje-destacado {
+            font-weight: 800;
+            color: #10b981;
+            border-color: #10b981;
+            background-color: #f0fdf4;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Traducción Libros</h1>
-        <!-- Formulario -->
-        <form action="guardar_traduc.php" method="post">
-            <?php
-            // Generar identificador basado en el año y mes
-            $identificador_base = date('Y_m');
-            ?>
+        <div class="card-custom">
+            <h2 class="mb-4 text-center" style="font-weight: 800; color: #1a2a3a;">
+                <i class="fas fa-language text-primary mr-2"></i>Traducción de Libros
+            </h2>
 
-            <div class="row mb-3">
-                <!-- Identificador -->
-                <div class="col-md-6">
-                    <label for="identificador_base">Identificador:</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="identificador_base" name="identificador_base" 
-                               value="<?php echo $identificador_base; ?>" maxlength="7" pattern="\d{4}_\d{2}" placeholder="Año_Mes" required>
-                        <select class="form-control custom-select" id="numero_envio" name="numero_envio" style="width: 50px;" required>
-                            <?php for ($i = 1; $i <= 9; $i++): ?>
-                                <option value="<?php echo $i; ?>" <?php echo $i == 1 ? 'selected' : ''; ?>><?php echo $i; ?></option>
-                            <?php endfor; ?>
+            <form action="guardar_traduc.php" method="post">
+                <?php $identificador_base = date('Y_m'); ?>
+
+                <div class="section-title">Información de Solicitud</div>
+                <div class="form-row align-items-end">
+                    <div class="form-group col-md-3">
+                        <label>Identificador:</label>
+                        <div class="input-group shadow-sm">
+                            <input type="text" class="form-control" id="identificador_base" name="identificador_base" 
+                                   value="<?php echo $identificador_base; ?>" maxlength="7" pattern="\d{4}_\d{2}" required>
+                            <div class="input-group-append">
+                                <select class="custom-select" name="numero_envio" style="max-width: 65px;">
+                                    <?php for ($i = 1; $i <= 9; $i++): ?>
+                                        <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="text-primary"># Profesores Solicitantes:</label>
+                        <input type="number" id="numero_profesores" name="numero_profesores" min="1" class="form-control border-primary shadow-sm" placeholder="Ej: 1" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label>Número de Oficio:</label>
+                        <input type="text" id="inputTrdFac" name="inputTrdFac" class="form-control shadow-sm" placeholder="Oficio TRD" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label>Fecha Solicitud:</label>
+                        <input type="date" name="fecha_solicitud" class="form-control shadow-sm" value="<?php echo date('Y-m-d'); ?>" required>
+                    </div>
+                </div>
+
+                <div id="contenedor_documentos" class="mb-4"></div>
+
+                <div class="section-title">Detalles de la Traducción</div>
+                <div class="form-row mb-3">
+                    <div class="form-group col-md-8">
+                        <label for="producto">Nombre del Libro / Producto:</label>
+                        <input type="text" class="form-control shadow-sm" name="producto" id="producto" placeholder="Título completo del libro traducido" required>
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label for="tipo_traduccion">Tipo de Traducción:</label>
+                        <select class="custom-select shadow-sm" id="tipo_traduccion" name="tipo_traduccion" required>
+                            <option value="libre">Libre</option>
+                            <option value="autorizada">Autorizada</option>
                         </select>
                     </div>
                 </div>
-                
-                <!-- Número de Oficio -->
-                <div class="col-md-6">
-                    <label for="inputTrdFac">Número de oficio:</label>
-                    <input type="text" id="inputTrdFac" name="inputTrdFac" class="form-control" required>
+
+                <div class="section-title">Puntaje Asignado</div>
+                <div class="form-row justify-content-center">
+                    <div class="form-group col-md-4 text-center">
+                        <label class="text-success fw-bold">Puntaje Total Salarial</label>
+                        <input type="number" class="form-control puntaje-destacado text-center shadow-sm" id="puntaje" name="puntaje" step="0.01" min="0" placeholder="0.00" required>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Número de Profesores -->
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="numero_profesores">Número de Profesores:</label>
-                    <input type="number" id="numero_profesores" name="numero_profesores" min="1" class="form-control" placeholder="Ingrese el número de profesores" required>
-
+                <hr class="mt-4">
+                <div class="d-flex justify-content-end align-items-center">
+                    <a href="index.php" class="btn btn-link text-muted mr-3">Cancelar</a>
+                    <button type="submit" class="btn btn-primary px-5 shadow-sm fw-bold">
+                        <i class="fas fa-paper-plane mr-2"></i>Enviar Solicitud
+                    </button>
                 </div>
-            </div>
-
-            <!-- Contenedor para documentos -->
-            <div id="contenedor_documentos" class="mb-3"></div>
-
-            <!-- Campos adicionales -->
-            <div class="row mb-3">
-                <div class="col-md-8">
-                    <label for="producto">Nombre del producto</label>
-                    <input type="text" class="form-control" name="producto" id="producto" placeholder="Ingrese el nombre del producto" required>
-                </div>
-            </div>
-
-            <!-- Fecha de Solicitud -->
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="fecha_solicitud">Fecha de Solicitud:</label>
-                    <input type="date" class="form-control" id="fecha_solicitud" name="fecha_solicitud" required>
-                </div>
-            </div>
-
-            <!-- Traducción Libro -->
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="tipo_traduccion">Tipo traducción: </label>
-                    <select class="form-control custom-select" id="tipo_traduccion" name="tipo_traduccion" required>
-                        <option value="libre">Libre</option>
-                        <option value="autorizada">Autorizada</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Campo de Puntaje -->
-            <div class="row mb-3">
-                <div class="col-md-12">
-                    <label for="puntaje">Puntaje Total:</label>
-                    <input type="number" class="form-control" id="puntaje" name="puntaje" step="0.01" min="0" required>
-                </div>
-            </div>
-
-            <!-- Botones -->
-            <div class="row">
-                <div class="col-md-12 text-right mt-3">
-                    <button type="submit" class="btn btn-primary">Enviar</button>
-                    <a href="index.php" class="btn btn-secondary">Volver</a>
-                </div>
-            </div>
-
-        </form>
+            </form>
+        </div>
     </div>
 
-    <!-- Script para manejar los campos dinámicos -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script>
         const numeroProfesoresInput = document.getElementById('numero_profesores');
         const contenedorDocumentos = document.getElementById('contenedor_documentos');
@@ -145,36 +131,34 @@
 
         numeroProfesoresInput.addEventListener('input', () => {
             contenedorDocumentos.innerHTML = '';
-
             const cantidad = parseInt(numeroProfesoresInput.value);
-            if (isNaN(cantidad) || cantidad < 1) return;
+            
+            if (isNaN(cantidad) || cantidad < 1) {
+                contenedorDocumentos.style.padding = "0";
+                return;
+            }
 
+            contenedorDocumentos.style.padding = "20px";
             for (let i = 1; i <= cantidad; i++) {
-                const fieldContainer = document.createElement('div');
-                fieldContainer.classList.add('row', 'align-items-center', 'mb-2');
+                const div = document.createElement('div');
+                div.className = 'form-row align-items-center mb-3';
+                div.innerHTML = `
+                    <div class="col-md-3">
+                        <label class="small font-weight-bold">Cédula Solicitante ${i}:</label>
+                        <input type="text" id="documento_${i}" name="documento_${i}" class="form-control form-control-sm shadow-sm" required>
+                    </div>
+                    <div class="col-md-9">
+                        <label class="small text-muted">Datos del Profesor:</label>
+                        <div id="datos_${i}" class="alert alert-light border m-0 p-1 small shadow-sm" style="min-height: 31px; display: flex; align-items: center;">
+                            <i class="fas fa-id-card-alt mr-2 text-muted"></i> Esperando identificación...
+                        </div>
+                    </div>
+                `;
+                contenedorDocumentos.appendChild(div);
 
-                const label = document.createElement('label');
-                label.textContent = `Documento solicitante ${i}:`;
-                label.setAttribute('for', `documento_${i}`);
-                label.classList.add('col-sm-3', 'col-form-label', 'fw-bold');
-
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.id = `documento_${i}`;
-                input.name = `documento_${i}`;
-                input.required = true;
-                input.classList.add('form-control', 'col-sm-3', 'me-3');
-                input.style.maxWidth = '150px';
-                input.addEventListener('blur', () => buscarDatos(input, i));
-
-                const datosContainer = document.createElement('div');
-                datosContainer.id = `datos_${i}`;
-                datosContainer.classList.add('col', 'datos-container', 'text-muted', 'ps-2');
-
-                fieldContainer.appendChild(label);
-                fieldContainer.appendChild(input);
-                fieldContainer.appendChild(datosContainer);
-                contenedorDocumentos.appendChild(fieldContainer);
+                document.getElementById(`documento_${i}`).addEventListener('blur', function() {
+                    buscarDatos(this, i);
+                });
             }
         });
 
@@ -182,41 +166,25 @@
             const documento = input.value.trim();
             if (documento === '') return;
 
-            console.log(`Buscando datos para el documento: ${documento}`);
             const datosContainer = document.getElementById(`datos_${index}`);
-            datosContainer.textContent = 'Cargando...';
+            datosContainer.innerHTML = '<i class="fas fa-spinner fa-spin mr-2 text-primary"></i>Consultando base de datos...';
 
             fetch(`obtener_datos_profesor.php?documento=${documento}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Error en la respuesta del servidor: ${response.status}`);
-                    }
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
-                    console.log('Datos recibidos:', data);
                     if (data.error) {
-                        datosContainer.textContent = data.error;
+                        datosContainer.innerHTML = `<i class="fas fa-exclamation-circle text-danger mr-2"></i><span class="text-danger">${data.error}</span>`;
                     } else {
-                        datosContainer.textContent = `Nombre: ${data.nombre_completo}, Departamento: ${data.nombre_depto}, Facultad: ${data.nombre_fac}`;
+                        datosContainer.innerHTML = `<i class="fas fa-check-circle text-success mr-2"></i><strong>${data.nombre_completo}</strong> | ${data.nombre_depto} | ${data.nombre_fac}`;
                         if (index === 1 && data.numero_oficio) {
                             numeroOficioInput.value = data.numero_oficio;
-                            console.log(`Número de oficio prellenado: ${data.numero_oficio}`);
                         }
                     }
                 })
                 .catch(error => {
-                    console.error('Error en la solicitud fetch:', error);
-                    datosContainer.textContent = 'Error al cargar los datos';
+                    datosContainer.innerHTML = '<i class="fas fa-times-circle text-danger mr-2"></i>Error al cargar los datos';
                 });
         }
-        document.querySelector('form').addEventListener('submit', function(e) {
-            console.log("Enviando formulario con el número de profesores:", numeroProfesoresInput.value);
-        });
     </script>
-
-    <!-- Scripts de Bootstrap -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -3,296 +3,270 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Libros | CIARP</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <title>Registro de Libros</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        body { background-color: #f4f7f6; color: #4a4a4a; }
+        .card-custom {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            background-color: #ffffff;
+            padding: 30px;
+            margin-bottom: 50px;
+        }
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #2c3e50;
+            border-bottom: 2px solid #eef2f7;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            margin-top: 20px;
+        }
+        #contenedor_documentos {
+            background-color: #f8fafd;
+            border-radius: 10px;
+            border-left: 5px solid #007bff;
+            transition: all 0.3s ease;
+        }
+        .form-control:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.1);
+        }
+        label { font-size: 0.85rem; margin-bottom: 0.4rem; }
+    </style>
 </head>
 <body>
     <div class="container mt-5">
-        <div class="modal-content p-4">
-            <h5 class="modal-title mb-3">Registro de Libros</h5>
+        <div class="card-custom">
+            <h2 class="mb-4 text-center" style="font-weight: 800; color: #1a2a3a;">
+                <i class="fas fa-book text-primary mr-2"></i>Registro de Libros
+            </h2>
+
             <form action="guardar_libro.php" method="post">
                 
-                  <!-- Fila 4: Número de Profesores -->
-                <div class="form-row">
-                    <div class="form-group col-md-4">
-                        <label for="numero_profesores">Número de Profesores</label>
-                        <input type="number" id="numero_profesores" name="numero_profesores" class="form-control">
-                    </div>
-                </div>
-
-                <!-- Contenedor para documentos de profesores -->
-                <div id="contenedor_documentos"></div>
-                <!-- Fila 1: Identificador Base - Oficio - Fecha de Solicitud -->
-                <div class="form-row">
-                   <?php
-                    $identificador_base = date('Y_m');
-                    ?>
-                    
-                   
-                        <!-- Identificador -->
-                        <div class="form-group col-md-4">
-                            <label for="identificador_base" class="form-label fw-bold">Identificador:</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control" id="identificador_base" name="identificador_base" 
-                                       value="<?php echo $identificador_base; ?>" maxlength="7" pattern="\d{4}_\d{2}" placeholder="Año_Mes" required>
-                                <select class="form-select form-select-sm" id="numero_envio" name="numero_envio" style="width: 50px;" required>
+                <div class="section-title">Información de Solicitud</div>
+                <div class="form-row align-items-end">
+                    <div class="form-group col-md-3">
+                        <label class="font-weight-bold">Identificador:</label>
+                        <div class="input-group">
+                            <?php $identificador_base = date('Y_m'); ?>
+                            <input type="text" class="form-control" name="identificador_base" 
+                                   value="<?php echo $identificador_base; ?>" maxlength="7" pattern="\d{4}_\d{2}" required>
+                            <div class="input-group-append">
+                                <select class="custom-select" name="numero_envio" style="border-radius: 0 5px 5px 0;">
                                     <?php for ($i = 1; $i <= 9; $i++): ?>
-                                        <option value="<?php echo $i; ?>" <?php echo $i == 1 ? 'selected' : ''; ?>><?php echo $i; ?></option>
+                                        <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
                                     <?php endfor; ?>
                                 </select>
                             </div>
                         </div>
-                   <div class="form-group col-md-4">
-    <label for="numeroOficio">Número de Oficio</label>
-    <input type="text" id="numeroOficio" name="numeroOficio" class="form-control" placeholder="Número de oficio">
-</div>
-                    <div class="form-group col-md-4">
-                        <label for="fecha_solicitud">Fecha de Solicitud</label>
-                        <input type="date" id="fecha_solicitud" name="fecha_solicitud" class="form-control" value="<?php echo date('Y-m-d'); ?>">
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="font-weight-bold text-primary"># Profesores Solicitantes:</label>
+                        <input type="number" id="numero_profesores" name="numero_profesores" class="form-control border-primary" min="1" placeholder="Ej: 1" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="font-weight-bold">Número de Oficio:</label>
+                        <input type="text" id="numeroOficio" name="numeroOficio" class="form-control" placeholder="Oficio TRD" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="font-weight-bold">Fecha Solicitud:</label>
+                        <input type="date" name="fecha_solicitud" class="form-control" value="<?php echo date('Y-m-d'); ?>">
                     </div>
                 </div>
 
-                <!-- Fila 2: Tipo de Libro - Producto - ISBN -->
+                <div id="contenedor_documentos" class="mb-4"></div>
+
+                <div class="section-title">Detalles del Libro</div>
                 <div class="form-row">
                     <div class="form-group col-md-4">
-                        <label for="tipo_libro">Tipo de Libro</label>
-                <select id="tipo_libro" name="tipo_libro" class="form-control">
-                    <option value="INVESTIGACION">INVESTIGACIÓN</option>
-                    <option value="TEXTO">TEXTO</option>
-                    <option value="ENSAYO">ENSAYO</option>
-                </select>
-                                    </div>
-                    <div class="form-group col-md-4">
-                        <label for="producto">Producto</label>
-                        <input type="text" id="producto" name="producto" class="form-control">
+                        <label class="font-weight-bold">Tipo de Libro:</label>
+                        <select id="tipo_libro" name="tipo_libro" class="form-control" required>
+                            <option value="INVESTIGACION">INVESTIGACIÓN</option>
+                            <option value="TEXTO">TEXTO</option>
+                            <option value="ENSAYO">ENSAYO</option>
+                        </select>
                     </div>
                     <div class="form-group col-md-4">
-                        <label for="isbn">ISBN</label>
-                        <input type="text" id="isbn" name="isbn" class="form-control">
+                        <label class="font-weight-bold">Título del Libro (Producto):</label>
+                        <input type="text" name="producto" class="form-control" required placeholder="Nombre completo del libro">
+                    </div>
+                    <div class="form-group col-md-4">
+                        <label class="font-weight-bold">ISBN:</label>
+                        <input type="text" name="isbn" class="form-control" placeholder="000-00-0000-000-0">
                     </div>
                 </div>
 
-                <!-- Fila 3: Mes y Año de Edición - Nombre de la Editorial - Tiraje -->
                 <div class="form-row">
                     <div class="form-group col-md-4">
-                      <label for="mes_anio_edicion">Mes y Año de Edición</label>
-<input type="month" id="mes_anio_edicion" name="mes_anio_edicion" class="form-control">
+                        <label class="font-weight-bold">Mes y Año de Edición:</label>
+                        <input type="month" name="mes_anio_edicion" class="form-control">
                     </div>
                     <div class="form-group col-md-4">
-                        <label for="nombre_editorial">Nombre de la Editorial</label>
-                        <input type="text" id="nombre_editorial" name="nombre_editorial" class="form-control">
+                        <label class="font-weight-bold">Nombre de la Editorial:</label>
+                        <input type="text" name="nombre_editorial" class="form-control">
                     </div>
                     <div class="form-group col-md-4">
-                        <label for="tiraje">Tiraje</label>
-                        <input type="text" id="tiraje" name="tiraje" class="form-control">
+                        <label class="font-weight-bold">Tiraje:</label>
+                        <input type="text" name="tiraje" class="form-control" placeholder="Cant. ejemplares">
                     </div>
                 </div>
 
-              
-
-                <!-- Fila 5: Autores - Evaluación 1 - Evaluación 2 - Puntaje -->
-                  <div class="form-row">
-                    <div class="form-group col-md-3">
-                        <label for="autores">Autores</label>
-                        <input type="text" id="autores" name="autores" class="form-control" min="1" placeholder="Cantidad de autores">
+                <div class="section-title">Evaluación y Calificación</div>
+                <div class="form-row align-items-end">
+                    <div class="form-group col-md-2">
+                        <label class="font-weight-bold"># Autores:</label>
+                        <input type="number" id="autores" name="autores" class="form-control" placeholder="Total" min="1" required>
                     </div>
-                    <div class="form-group col-md-3">
-                        <label for="evaluacion1">Evaluación 1</label>
-                       
-                        <input type="text" id="evaluacion1" name="evaluacion1" class="form-control" pattern="^\d+(\.\d{1,2})?$" placeholder="Ej: 8.75">
-
+                    <div class="form-group col-md-2">
+                        <label class="font-weight-bold">Evaluación 1:</label>
+                        <input type="text" id="evaluacion1" name="evaluacion1" class="form-control" pattern="^\d+(\.\d{1,2})?$" placeholder="0.00">
                     </div>
-                    <div class="form-group col-md-3">
-                        <label for="evaluacion2">Evaluación 2</label>
-    <input type="text" id="evaluacion2" name="evaluacion2" class="form-control" pattern="^\d+(\.\d{1,2})?$" placeholder="Ej: 9.50">
+                    <div class="form-group col-md-2">
+                        <label class="font-weight-bold">Evaluación 2:</label>
+                        <input type="text" id="evaluacion2" name="evaluacion2" class="form-control" pattern="^\d+(\.\d{1,2})?$" placeholder="0.00">
                     </div>
-                         <div class="form-group col-md-3">
-        <label for="puntaje_f">Puntaje Final</label>
-        <input type="text" id="puntaje_f" name="puntaje_f" class="form-control">
-    </div>
-                    
-                   
-                </div>                  <div class="form-row">
 
-                <div class="form-group col-md-12">
-                        <label for="puntaje">Puntaje</label>
-                        <input type="text" id="puntaje" name="puntaje" class="form-control" readonly>
-                    </div></div>
-                                <div class="mt-3">
-                    <button type="button" class="btn btn-secondary" onclick="window.history.back();">Cerrar</button>
-                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    <div class="form-group col text-center" id="contenedor_btn_mas">
+                        <button type="button" class="btn btn-outline-info btn-sm" onclick="mostrarTercerEvaluador()">
+                            <i class="fas fa-plus mr-1"></i> Evaluador
+                        </button>
+                    </div>
+
+                    <div class="form-group col-md-2" id="grupo_evaluacion3" style="display: none;">
+                        <label class="font-weight-bold text-danger">Evaluación 3:</label>
+                        <input type="text" id="evaluacion3" name="evaluacion3" class="form-control border-danger" pattern="^\d+(\.\d{1,2})?$" placeholder="Opcional">
+                    </div>
+
+                    <div class="form-group col-md-3">
+                        <label class="font-weight-bold text-success">Puntaje Final:</label>
+                        <input type="text" id="puntaje_f" name="puntaje_f" class="form-control font-weight-bold border-success text-success" readonly>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="small text-muted font-italic">Memoria de cálculo:</label>
+                    <input type="text" id="puntaje" name="puntaje" class="form-control form-control-sm bg-light" readonly>
+                </div>
+
+                <hr>
+                <div class="d-flex justify-content-end align-items-center">
+                    <button type="button" class="btn btn-link text-muted mr-3" onclick="window.history.back();">Cancelar</button>
+                    <button type="submit" class="btn btn-primary px-5 shadow-sm">
+                        <i class="fas fa-save mr-2"></i>Guardar Registro
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-    
-    <!-- Script para calcular el promedio -->
- <script>
-    // Obtener referencias a los elementos de entrada
-    const autoresInput = document.getElementById('autores');
-    const evaluacion1Input = document.getElementById('evaluacion1');
-    const evaluacion2Input = document.getElementById('evaluacion2');
-    const tipoLibroInput = document.getElementById('tipo_libro');
-    const puntajeInput = document.getElementById('puntaje');
-    const puntajeFInput = document.getElementById('puntaje_f');
+    <script>
+        // Lógica de cálculo (reutilizada y optimizada)
+        const autoresInput = document.getElementById('autores');
+        const evaluacion1Input = document.getElementById('evaluacion1');
+        const evaluacion2Input = document.getElementById('evaluacion2');
+        const evaluacion3Input = document.getElementById('evaluacion3');
+        const tipoLibroInput = document.getElementById('tipo_libro');
+        const puntajeInput = document.getElementById('puntaje');
+        const puntajeFInput = document.getElementById('puntaje_f');
 
-    // Función para redondear hacia abajo a dos decimales
-    function redondearHaciaAbajo(valor) {
-        return Math.floor(valor * 100) / 100;
-    }
+        function mostrarTercerEvaluador() {
+            document.getElementById('grupo_evaluacion3').style.display = 'block';
+            document.getElementById('contenedor_btn_mas').style.display = 'none';
+            calcularPuntaje();
+        }
 
-    // Función para calcular el puntaje
-    function calcularPuntaje() {
-        const autores = parseInt(autoresInput.value);
-        const eval1 = parseFloat(evaluacion1Input.value);
-        const eval2 = parseFloat(evaluacion2Input.value);
-        const tipoLibro = tipoLibroInput.value.trim().toUpperCase(); // Convertir a mayúsculas para comparar
+        function redondearHaciaAbajo(valor) { return Math.floor(valor * 100) / 100; }
 
-        if (!isNaN(eval1) && !isNaN(eval2) && !isNaN(autores) && autores > 0) {
-            // Calcular el promedio de las evaluaciones
-            const suma = eval1 + eval2;
-            const promedio = (suma / 2).toFixed(2); // Promedio con dos decimales
-            const porcentaje = (promedio / 100).toFixed(4); // Convertir a porcentaje decimal
+        function calcularPuntaje() {
+            const autores = parseInt(autoresInput.value);
+            const eval1 = parseFloat(evaluacion1Input.value);
+            const eval2 = parseFloat(evaluacion2Input.value);
+            const eval3 = parseFloat(evaluacion3Input.value);
+            const tipoLibro = tipoLibroInput.value.trim().toUpperCase();
+            const eval3Activo = window.getComputedStyle(document.getElementById('grupo_evaluacion3')).display !== 'none';
+            const usarEval3 = eval3Activo && !isNaN(eval3);
 
-            // Determinar el multiplicador según el tipo de libro
-            let multiplicador = 0;
-            if (tipoLibro === 'TEXTO') {
-                multiplicador = 15;
-            } else if (tipoLibro === 'INVESTIGACION') {
-                multiplicador = 20;
-            } else if (tipoLibro === 'ENSAYO') {
-                multiplicador = 15;
-            }
+            if (!isNaN(eval1) && !isNaN(eval2) && !isNaN(autores) && autores > 0) {
+                let suma = eval1 + eval2;
+                let divisor = 2;
+                if (usarEval3) { suma += eval3; divisor = 3; }
 
-            // Calcular el puntaje base
-            if (multiplicador > 0) {
+                const promedio = (suma / divisor).toFixed(2); 
+                const porcentaje = (promedio / 100).toFixed(4);
+                let multiplicador = (tipoLibro === 'INVESTIGACION') ? 20 : 15;
+
                 const puntajeBase = porcentaje * multiplicador;
                 let puntajeFinal;
                 let detalleAutores = '';
 
-                // Aplicar las reglas según el número de autores y preparar el detalle
                 if (autores <= 3) {
                     puntajeFinal = puntajeBase;
-                    detalleAutores = '(Hasta 3 autores: puntaje total)';
-                } else if (autores >= 4 && autores <= 5) {
+                    detalleAutores = '(Hasta 3: 100%)';
+                } else if (autores <= 5) {
                     puntajeFinal = puntajeBase / 2;
-                    detalleAutores = '(4 a 5 autores: mitad del puntaje)';
+                    detalleAutores = '(4-5: 50%)';
                 } else {
                     puntajeFinal = puntajeBase / (autores / 2);
-                    detalleAutores = `(6 o más autores: dividido por ${autores / 2})`;
+                    detalleAutores = `(6+: / ${autores / 2})`;
                 }
 
-                const puntajeRedondeado = redondearHaciaAbajo(puntajeFinal).toFixed(2); // Redondear hacia abajo
-
-                // Mostrar el proceso de cálculo completo con detalle
-                puntajeInput.value = `(${eval1} + ${eval2}) / 2 = ${promedio}% * ${multiplicador} = ${puntajeBase.toFixed(2)} ${detalleAutores}`;
+                const puntajeRedondeado = redondearHaciaAbajo(puntajeFinal).toFixed(2);
+                const textoSuma = usarEval3 ? `(${eval1}+${eval2}+${eval3})/3` : `(${eval1}+${eval2})/2`;
                 
+                puntajeInput.value = `${textoSuma} = ${promedio}% * ${multiplicador} = ${puntajeBase.toFixed(2)} ${detalleAutores}`;
                 puntajeFInput.value = puntajeRedondeado;
-            } else {
-                puntajeInput.value = 'Tipo de libro no válido';
-                puntajeFInput.value = '';
             }
-        } else {
-            puntajeInput.value = ''; // Limpiar el campo si los datos no son válidos
-            puntajeFInput.value = '';
         }
-    }
 
-    // Añadir eventos para calcular el puntaje cuando cambian los valores
-    autoresInput.addEventListener('input', calcularPuntaje);
-    evaluacion1Input.addEventListener('input', calcularPuntaje);
-    evaluacion2Input.addEventListener('input', calcularPuntaje);
-    tipoLibroInput.addEventListener('input', calcularPuntaje);
-</script>
+        [autoresInput, evaluacion1Input, evaluacion2Input, evaluacion3Input, tipoLibroInput].forEach(i => i.addEventListener('input', calcularPuntaje));
 
-
-
-    <!-- Script para generar campos de documentos de profesores -->
-
-    <!-- Script para generar campos de documentos de profesores -->
-    <script>
+        // Generación dinámica de profesores
         const numeroProfesoresInput = document.getElementById('numero_profesores');
-const contenedorDocumentos = document.getElementById('contenedor_documentos');
+        const contenedorDocumentos = document.getElementById('contenedor_documentos');
 
-numeroProfesoresInput.addEventListener('input', () => {
-    contenedorDocumentos.innerHTML = ''; // Limpiar el contenedor cada vez que se cambie el número
+        numeroProfesoresInput.addEventListener('input', () => {
+            contenedorDocumentos.innerHTML = '';
+            const cantidad = parseInt(numeroProfesoresInput.value);
+            if (isNaN(cantidad) || cantidad < 1) { contenedorDocumentos.style.padding = "0"; return; }
 
-    const cantidad = parseInt(numeroProfesoresInput.value);
-    if (isNaN(cantidad) || cantidad < 1) return; // Validación de cantidad
-
-    for (let i = 1; i <= cantidad; i++) {
-        // Crear el contenedor del campo de documento y datos
-        const fieldContainer = document.createElement('div');
-        fieldContainer.classList.add('form-group', 'd-flex', 'align-items-center');
-
-        // Etiqueta para el campo de documento
-        const label = document.createElement('label');
-        label.textContent = `Cédula ${i}`;
-        label.setAttribute('for', `cedulaProfesor${i}`);
-        label.classList.add('mr-2'); // Añadir margen a la derecha para espacio
-
-        // Campo de entrada de documento
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.id = `cedulaProfesor${i}`;
-        input.name = `cedulaProfesor${i}`;
-input.classList.add('form-control', 'mr-2', 'w-25'); // Agrega la clase 'w-25' para reducir el ancho
-        input.placeholder = `Ingrese cédula del profesor ${i}`;
-
-        // Contenedor para mostrar los datos del profesor
-        const datosContainer = document.createElement('div');
-        datosContainer.id = `datos_${i}`;
-        datosContainer.classList.add('text-muted'); // Estilo de texto
-
-        // Añadir evento para buscar los datos cuando se introduce el documento
-        input.addEventListener('input', () => buscarDatos(input, i));
-
-        // Añadir los elementos al contenedor
-        fieldContainer.appendChild(label);
-        fieldContainer.appendChild(input);
-        fieldContainer.appendChild(datosContainer);
-        contenedorDocumentos.appendChild(fieldContainer);
-    }
-});
-        // Función para buscar datos
-     function buscarDatos(input, index) {
-    const documento = input.value.trim();
-    if (documento === '') return;
-
-    console.log(`Buscando datos para el documento: ${documento}`);
-    const datosContainer = document.getElementById(`datos_${index}`);
-    datosContainer.textContent = 'Cargando...'; // Mostrar indicador de carga
-
-    fetch(`obtener_datos_profesor.php?documento=${documento}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Error en la respuesta del servidor: ${response.status}`);
+            contenedorDocumentos.style.padding = "15px";
+            for (let i = 1; i <= cantidad; i++) {
+                const row = document.createElement('div');
+                row.className = 'form-row align-items-center mb-2';
+                row.innerHTML = `
+                    <div class="col-md-3">
+                        <input type="text" id="cedulaProfesor${i}" name="cedulaProfesor${i}" class="form-control form-control-sm" placeholder="Cédula ${i}" required>
+                    </div>
+                    <div class="col-md-9 small text-muted" id="datos_${i}"><i class="fas fa-id-card mr-1"></i> Esperando documento...</div>
+                `;
+                contenedorDocumentos.appendChild(row);
+                document.getElementById(`cedulaProfesor${i}`).addEventListener('blur', function() { buscarDatos(this, i); });
             }
-            return response.json();
-        })
-        .then(data => {
-            console.log('Datos recibidos:', data); // Mostrar datos en consola para depuración
-            if (data.error) {
-                datosContainer.textContent = data.error;
-            } else {
-                datosContainer.textContent = `${data.nombre_completo}, Depto: ${data.nombre_depto}, Fac.: ${data.nombre_fac}`;
-
-                // Prellenar el campo "oficio" si es el primer profesor (index === 1)
-                if (index === 1 && data.numero_oficio) {
-                    const numeroOficioInput = document.getElementById('numeroOficio');
-                    numeroOficioInput.value = data.numero_oficio;
-                    console.log(`Número de oficio prellenado: ${data.numero_oficio}`);
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Error en la solicitud fetch:', error);
-            datosContainer.textContent = 'Error al cargar los datos';
         });
-}
+
+        function buscarDatos(input, index) {
+            const doc = input.value.trim();
+            if (doc === '') return;
+            const res = document.getElementById(`datos_${index}`);
+            res.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
+            fetch(`obtener_datos_profesor.php?documento=${doc}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) res.innerHTML = `<span class="text-danger"><i class="fas fa-times"></i> ${data.error}</span>`;
+                    else {
+                        res.innerHTML = `<i class="fas fa-check-circle text-success"></i> <strong>${data.nombre_completo}</strong> | ${data.nombre_depto}`;
+                        if (index === 1 && data.numero_oficio) document.getElementById('numeroOficio').value = data.numero_oficio;
+                    }
+                })
+                .catch(() => res.innerHTML = '<span class="text-danger">Error de conexión</span>');
+        }
     </script>
 </body>
 </html>

@@ -4,25 +4,25 @@ include 'conn.php';
 
 // Verificar que el formulario haya sido enviado
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // Capturar datos del formulario
-    $identificadorBase = $_POST['identificador_base'];
-    $numeroEnvio = $_POST['numero_envio'];
+    // 1. Capturar y formatear datos del formulario
+    $identificadorBase    = $_POST['identificador_base'] ?? '';
+    $numeroEnvio          = $_POST['numero_envio'] ?? '';
     $identificadorCompleto = $identificadorBase . '_' . $numeroEnvio;
 
-    $numeroOficio = $_POST['numeroOficio'];
-    $fechaSolicitud = $_POST['fecha_solicitud'];
-    $nombreEvento = $_POST['nombre_evento'];
-    $ambito = $_POST['ambito'];
-    $categoriaPremio = $_POST['categoria_premio'];
-    $nivelGanado = $_POST['nivel_ganado'];
-    $lugarFecha = $_POST['lugar_fecha'];
-    $numeroProfesores = $_POST['numero_profesores'];
-    $autores = $_POST['autores'];
-    $puntos = $_POST['puntos'];
-    $estado = "ac"; // Valor por defecto
+    $numeroOficio      = $_POST['numeroOficio'] ?? '';
+    $fechaSolicitud    = $_POST['fecha_solicitud'] ?? '';
+    $nombreEvento      = $_POST['nombre_evento'] ?? '';
+    $ambito            = $_POST['ambito'] ?? '';
+    $categoriaPremio   = $_POST['categoria_premio'] ?? '';
+    $nivelGanado       = $_POST['nivel_ganado'] ?? '';
+    $lugarFecha        = $_POST['lugar_fecha'] ?? '';
+    $numeroProfesores  = intval($_POST['numero_profesores'] ?? 0);
+    $autores           = $_POST['autores'] ?? '';
+    $puntos            = $_POST['puntos'] ?? 0;
+    $estado            = "ac"; 
     $tipo_productividad = "puntos";
 
-    // Crear la consulta de inserción para la tabla `premios`
+    // 2. Consulta de inserción principal (13 parámetros)
     $sql = "INSERT INTO premios (
                 identificador,
                 numero_oficio,
@@ -35,12 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 numero_profesores,
                 autores,
                 puntos,
-                estado, tipo_productividad
+                estado, 
+                tipo_productividad
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-    // Preparar la consulta para evitar inyecciones SQL
     if ($stmt = $conn->prepare($sql)) {
-        // Vincular parámetros
+        // Vincular parámetros: s=string, i=integer, d=double/float
         $stmt->bind_param(
             "ssssssssisdss",
             $identificadorCompleto,
@@ -54,55 +54,49 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $numeroProfesores,
             $autores,
             $puntos,
-            $estado,$tipo_productividad
+            $estado,
+            $tipo_productividad
         );
 
-        // Ejecutar la consulta
         if ($stmt->execute()) {
-            // Obtener el último ID insertado para el premio
             $idPremio = $conn->insert_id;
 
-            // Insertar datos en la tabla `premios_profesor`
-            for ($i = 1; $i <= $numeroProfesores; $i++) {
-                $idProfesor = $_POST["cedula_$i"];
-                
-                // Verificar que la cédula no esté vacía
-                if (!empty($idProfesor)) {
-                    // Crear la consulta de inserción para `premios_profesor`
-                    $sqlProfesor = "INSERT INTO premios_profesor (id_premio, id_profesor) VALUES (?, ?)";
-
-                    if ($stmtProfesor = $conn->prepare($sqlProfesor)) {
-                        // Vincular parámetros para `premios_profesor`
-                        $stmtProfesor->bind_param("is", $idPremio, $idProfesor);
-
-                        // Ejecutar la consulta
-                        if (!$stmtProfesor->execute()) {
-                            echo "Error al insertar profesor $i: " . $stmtProfesor->error;
+            // 3. Inserción de relación con Profesores (Optimizado)
+            if ($numeroProfesores > 0) {
+                $sqlProfesor = "INSERT INTO premios_profesor (id_premio, id_profesor) VALUES (?, ?)";
+                if ($stmtProfesor = $conn->prepare($sqlProfesor)) {
+                    for ($i = 1; $i <= $numeroProfesores; $i++) {
+                        $idProfesor = $_POST["cedula_$i"] ?? '';
+                        if (!empty($idProfesor)) {
+                            $stmtProfesor->bind_param("is", $idPremio, $idProfesor);
+                            $stmtProfesor->execute();
                         }
-
-                        // Cerrar la declaración del profesor
-                        $stmtProfesor->close();
-                    } else {
-                        echo "Error preparando la consulta para profesor $i: " . $conn->error;
                     }
+                    $stmtProfesor->close();
                 }
             }
 
-            echo "Premio y profesores guardados exitosamente.";
-        } else {
-            echo "Error al guardar el premio: " . $stmt->error;
-        }
-        echo '<br><a href="menu_ini.php">Volver al menú</a>';
+            // ÉXITO: Redirección profesional al index
+            $conn->close();
+            header("Location: index.php?status=success");
+            exit();
 
-        // Cerrar la declaración
+        } else {
+            // ERROR DE EJECUCIÓN: Redirigir con mensaje de error
+            $error = urlencode($stmt->error);
+            header("Location: index.php?status=error&msg=$error");
+            exit();
+        }
         $stmt->close();
     } else {
-        echo "Error preparando la consulta: " . $conn->error;
+        // ERROR DE PREPARACIÓN
+        $error = urlencode($conn->error);
+        header("Location: index.php?status=error&msg=$error");
+        exit();
     }
-
-    // Cerrar la conexión a la base de datos
-    $conn->close();
 } else {
-    echo "Método de solicitud no permitido.";
+    // Acceso no permitido
+    header("Location: index.php");
+    exit();
 }
 ?>

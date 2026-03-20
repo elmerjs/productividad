@@ -1,121 +1,98 @@
 <?php
-// Incluir archivo de conexión a la base de datos
-// Incluir archivo de conexión a la base de datos
+/**
+ * Registro de Libros y Profesores
+ * Procesa la inserción con soporte para hasta 3 evaluadores.
+ */
 include 'conn.php';
 
-// Verificar que el formulario haya sido enviado
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // Capturar datos del formulario
-    $identificador = $_POST['identificador_base'];
-    $envio = $_POST['numero_envio'];
+    // 1. Capturar y formatear identificador
+    $identificador = $_POST['identificador_base'] ?? '';
+    $envio = $_POST['numero_envio'] ?? '';
     $identificador_completo = $identificador . '_' . $envio;
 
-    $numero_oficio = $_POST['numeroOficio'];
-    $fecha_solicitud = $_POST['fecha_solicitud'];
-    $tipo_libro = $_POST['tipo_libro'];
-    $producto = $_POST['producto'];
-    $isbn = $_POST['isbn'];
-    $mes_ano_edicion = $_POST['mes_anio_edicion'];
-    $nombre_editorial = $_POST['nombre_editorial'];
-    $tiraje = $_POST['tiraje'];
-    $numero_profesores = $_POST['numero_profesores'];
-    $autores = $_POST['autores'];
-    $evaluacion_1 = $_POST['evaluacion1'];
-    $evaluacion_2 = $_POST['evaluacion2'];
-    $puntaje = $_POST['puntaje'];
-    $puntaje_final = $_POST['puntaje_f'];
-    $estado = "ac"; // Valor por defecto
+    // 2. Capturar datos generales del libro
+    $numero_oficio      = $_POST['numeroOficio'] ?? '';
+    $fecha_solicitud    = $_POST['fecha_solicitud'] ?? '';
+    $tipo_libro         = $_POST['tipo_libro'] ?? '';
+    $producto           = $_POST['producto'] ?? '';
+    $isbn               = $_POST['isbn'] ?? '';
+    $mes_ano_edicion    = $_POST['mes_anio_edicion'] ?? '';
+    $nombre_editorial   = $_POST['nombre_editorial'] ?? '';
+    $tiraje             = $_POST['tiraje'] ?? '';
+    $numero_profesores  = intval($_POST['numero_profesores'] ?? 0);
+    $autores            = $_POST['autores'] ?? '';
+    
+    // 3. Evaluaciones (Soporte para el 3er evaluador opcional)
+    $evaluacion_1 = $_POST['evaluacion1'] ?? null;
+    $evaluacion_2 = $_POST['evaluacion2'] ?? null;
+    $evaluacion_3 = !empty($_POST['evaluacion3']) ? $_POST['evaluacion3'] : null; 
+    
+    // 4. Cálculos y Metadatos
+    $puntaje            = $_POST['puntaje'] ?? '';
+    $puntaje_final      = $_POST['puntaje_f'] ?? '';
+    $estado             = "ac"; 
     $tipo_productividad = "puntos";
 
-    // Crear la consulta de inserción para la tabla `libros`
+    // 5. Preparar Consulta SQL (18 parámetros)
     $sql = "INSERT INTO libros (
-                identificador,
-                numero_oficio,
-                fecha_solicitud,
-                tipo_libro,
-                producto,
-                isbn,
-                mes_ano_edicion,
-                nombre_editorial,
-                tiraje,
-                numero_profesores,
-                autores,
-                evaluacion_1,
-                evaluacion_2,
-                calculo,
-                puntaje_final,
+                identificador, numero_oficio, fecha_solicitud, tipo_libro, 
+                producto, isbn, mes_ano_edicion, nombre_editorial, 
+                tiraje, numero_profesores, autores, evaluacion_1, 
+                evaluacion_2, evaluacion_3, calculo, puntaje_final, 
                 estado, tipo_productividad
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,  ?,?, ?, ?, ?, ?, ?)";
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-    // Preparar la consulta para evitar inyecciones SQL
     if ($stmt = $conn->prepare($sql)) {
-        // Vincular parámetros
+        // Vinculación de 18 parámetros (s = string, i = integer)
         $stmt->bind_param(
-            "ssssssssiiissssss",
-            $identificador_completo,
-            $numero_oficio,
-            $fecha_solicitud,
-            $tipo_libro,
-            $producto,
-            $isbn,
-            $mes_ano_edicion,
-            $nombre_editorial,
-            $tiraje,
-            $numero_profesores,
-            $autores,
-            $evaluacion_1,
-            $evaluacion_2, $puntaje,
-            $puntaje_final,
-            $estado,$tipo_productividad
+            "ssssssssiiisssssss", 
+            $identificador_completo, $numero_oficio, $fecha_solicitud, $tipo_libro,
+            $producto, $isbn, $mes_ano_edicion, $nombre_editorial,
+            $tiraje, $numero_profesores, $autores, $evaluacion_1,
+            $evaluacion_2, $evaluacion_3, $puntaje, $puntaje_final,
+            $estado, $tipo_productividad
         );
 
-        // Ejecutar la consulta
         if ($stmt->execute()) {
-            // Obtener el último ID insertado para el libro
             $id_libro = $conn->insert_id;
 
-            // Insertar datos en la tabla `libro_profesor`
-            for ($i = 1; $i <= $numero_profesores; $i++) {
-                $id_profesor = $_POST["cedulaProfesor$i"];
-                
-                // Verificar que la cédula no esté vacía
-                if (!empty($id_profesor)) {
-                    // Crear la consulta de inserción para `libro_profesor`
-                    $sql_profesor = "INSERT INTO libro_profesor (id_libro, id_profesor) VALUES (?, ?)";
+            // 6. Inserción de la relación con Profesores
+            if ($numero_profesores > 0) {
+                $sql_profesor = "INSERT INTO libro_profesor (id_libro, id_profesor) VALUES (?, ?)";
+                $stmt_profesor = $conn->prepare($sql_profesor);
 
-                    if ($stmt_profesor = $conn->prepare($sql_profesor)) {
-                        // Vincular parámetros para `libro_profesor`
-                        $stmt_profesor->bind_param("is", $id_libro, $id_profesor);
-
-                        // Ejecutar la consulta
-                        if (!$stmt_profesor->execute()) {
-                            echo "Error al insertar profesor $i: " . $stmt_profesor->error;
-                        }
-
-                        // Cerrar la declaración del profesor
-                        $stmt_profesor->close();
-                    } else {
-                        echo "Error preparando la consulta para profesor $i: " . $conn->error;
+                for ($i = 1; $i <= $numero_profesores; $i++) {
+                    $cedula = $_POST["cedulaProfesor$i"] ?? '';
+                    if (!empty($cedula)) {
+                        $stmt_profesor->bind_param("is", $id_libro, $cedula);
+                        $stmt_profesor->execute();
                     }
                 }
+                $stmt_profesor->close();
             }
 
-            echo "Libro y profesores guardados exitosamente.";
+            // ÉXITO: Redirigir con bandera de éxito
+            $conn->close();
+            header("Location: index.php?status=success");
+            exit();
+
         } else {
-            echo "Error al guardar el libro: " . $stmt->error;
+            // ERROR EN EJECUCIÓN: Redirigir con mensaje de error
+            $error_msg = urlencode($stmt->error);
+            $conn->close();
+            header("Location: index.php?status=error&msg=$error_msg");
+            exit();
         }
-        echo '<br><a href="menu_ini.php">Volver al menú</a>';
-
-        // Cerrar la declaración
-        $stmt->close();
     } else {
-        echo "Error preparando la consulta: " . $conn->error;
+        // ERROR EN PREPARACIÓN
+        $error_msg = urlencode($conn->error);
+        $conn->close();
+        header("Location: index.php?status=error&msg=$error_msg");
+        exit();
     }
-
-    // Cerrar la conexión a la base de datos
-    $conn->close();
 } else {
-    echo "Método de solicitud no permitido.";
+    // Acceso no autorizado
+    header("Location: index.php");
+    exit();
 }
-
-?>

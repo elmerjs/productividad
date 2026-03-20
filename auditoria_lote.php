@@ -6,7 +6,7 @@ $conn->set_charset("utf8mb4");
 $lote = isset($_GET['lote']) ? $conn->real_escape_string($_GET['lote']) : '';
 
 if (empty($lote)) {
-    die("<div style='padding:20px; font-family:sans-serif;'><h3>Error</h3><p>Debe especificar un lote a auditar.</p><a href='lista_solicitudes.php'>Volver</a></div>");
+    die("<div style='padding:20px; font-family:sans-serif;'><h3>Error</h3><p>Debe especificar un lote a auditar.</p><a href='index.php'>Volver</a></div>");
 }
 
 // 2. La Mega-Consulta de Auditoría (Cruza Solicitudes Recientes y el Histórico de Oracle)
@@ -258,7 +258,7 @@ $total_alertas = count($data);
                     <p class="mt-2 mb-0 opacity-75">Detección de posibles fraccionamientos o dobles cobros cruzando bases de datos.</p>
                 </div>
                 <div>
-                    <a href="lista_solicitudes.php" class="btn btn-back fw-bold px-4 py-2 rounded-3">
+                    <a href="index.php" class="btn btn-back fw-bold px-4 py-2 rounded-3">
                         <i class="fas fa-arrow-left me-2"></i> Volver a Solicitudes
                     </a>
                 </div>

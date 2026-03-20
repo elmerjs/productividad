@@ -1,45 +1,45 @@
 <?php
-require 'conn.php';
+/**
+ * eliminar_solicitud.php
+ * Realiza un borrado lógico actualizando el estado a 'an' (anulado).
+ */
 
-if (isset($_GET['id_solicitud']) && isset($_GET['motivo'])) {
-    $id_solicitud = $_GET['id_solicitud'];
-    $motivo = $_GET['motivo'];
+include_once('conn.php');
 
-    try {
-        // Actualizar estado_solicitud y obs_solicitud con el motivo
-        $stmt = $conn->prepare("UPDATE solicitud SET estado_solicitud = 'an', obs_solicitud = ? WHERE id_solicitud_articulo = ?");
-        $stmt->bind_param('si', $motivo, $id_solicitud);
-        $stmt->execute();
+if (isset($_GET['id_solicitud']) && !empty($_GET['id_solicitud'])) {
+    
+    $id_solicitud = intval($_GET['id_solicitud']); //
+    $motivo = isset($_GET['motivo']) ? trim($_GET['motivo']) : 'No especificado'; //
 
-        if ($stmt->affected_rows > 0) {
-            echo "<script>
-                alert('Solicitud anulada correctamente con motivo: " . htmlspecialchars($motivo) . "');
-                window.history.go(-1);
-                setTimeout(() => location.reload(), 500);
-            </script>";
+    // Consulta para actualizar el estado y la observación en lugar de borrar
+    $sql = "UPDATE solicitud 
+            SET estado_solicitud = 'an', 
+                obs_solicitud = ? 
+            WHERE id_solicitud_articulo = ?"; //
+
+    if ($stmt = $conn->prepare($sql)) {
+        // "si" indica que el primer parámetro es string (motivo) y el segundo entero (id)
+        $stmt->bind_param("si", $motivo, $id_solicitud);
+        
+        if ($stmt->execute()) {
+            $stmt->close();
+            $conn->close();
+            // Redirigir con un nuevo estado para SweetAlert2
+            header("Location: index.php?status=success_anular");
+            exit();
         } else {
-            echo "<script>
-                alert('No se encontró la solicitud o no se pudo anular.');
-                window.history.go(-1);
-                setTimeout(() => location.reload(), 500);
-            </script>";
+            $error = urlencode($stmt->error);
+            header("Location: index.php?status=error&msg=$error");
+            exit();
         }
-
-        $stmt->close();
-    } catch (Exception $e) {
-        echo "<script>
-            alert('Error al anular la solicitud: " . addslashes($e->getMessage()) . "');
-            window.history.go(-1);
-            setTimeout(() => location.reload(), 500);
-        </script>";
-    } finally {
-        $conn->close();
+    } else {
+        $error = urlencode($conn->error);
+        header("Location: index.php?status=error&msg=$error");
+        exit();
     }
+
 } else {
-    echo "<script>
-        alert('ID de solicitud o motivo no proporcionado.');
-        window.history.go(-1);
-        setTimeout(() => location.reload(), 500);
-    </script>";
+    header("Location: index.php");
+    exit();
 }
 ?>

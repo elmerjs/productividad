@@ -1,332 +1,253 @@
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <title>Bonificación - Formulario  ponencias</title>
-        </head>
-    <body>
-        <div class="container mt-5">
-            <div class="modal-content p-4">
-                <h5 class="modal-title mb-3">Bonificaicón - Ponencias</h5>
-                <form action="guardar_ponencias_bon.php" method="post">
-
-                      <!-- Fila 4: Número de Profesores -->
-                    <div class="form-row">
-                        <div class="form-group col-md-4">
-                            <label for="numero_profesores">Número de Profesores</label>
-                            <input type="number" id="numero_profesores" name="numero_profesores" class="form-control">
-                        </div>
-                    </div>
-
-                    <!-- Contenedor para documentos de profesores -->
-                    <div id="contenedor_documentos"></div>
-                    <!-- Fila 1: Identificador Base - Oficio - Fecha de Solicitud -->
-                    <div class="form-row">
-                       <?php
-                        $identificador_base = date('Y_m');
-                        ?>
-
-
-                            <!-- Identificador -->
-                            <div class="form-group col-md-4">
-                                <label for="identificador_base" class="form-label fw-bold">Identificador:</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="identificador_base" name="identificador_base" 
-                                           value="<?php echo $identificador_base; ?>" maxlength="7" pattern="\d{4}_\d{2}" placeholder="Año_Mes" required>
-                                    <select class="form-select form-select-sm" id="numero_envio" name="numero_envio" style="width: 50px;" required>
-                                        <?php for ($i = 1; $i <= 9; $i++): ?>
-                                            <option value="<?php echo $i; ?>" <?php echo $i == 1 ? 'selected' : ''; ?>><?php echo $i; ?></option>
-                                        <?php endfor; ?>
-                                    </select>
-                                </div>
-                            </div>
-                       <div class="form-group col-md-4">
-        <label for="numeroOficio">Número de Oficio</label>
-        <input type="text" id="numeroOficio" name="numeroOficio" class="form-control" placeholder="Número de oficio">
-    </div>
-                        <div class="form-group col-md-4">
-                            <label for="fecha_solicitud">Fecha de Solicitud</label>
-                            <input type="date" id="fecha_solicitud" name="fecha_solicitud" class="form-control" value="<?php echo date('Y-m-d'); ?>">
-                        </div>
-                    </div>
-
-                    <!-- Fila 2: Tipo de Libro - Producto - ISBN -->
-                    <div class="form-row">
-                        <div class="form-group col-md-4">
-
-               <div class="select-group">
-        <label for="difusion" >Grado de Difusión geográfico:</label>
-        <select name="difusion" id="difusion"  class="form-control" required>
-            <option value="" disabled selected>Seleccione una opción</option>
-            <option value="regional">Evento Regional</option>
-            <option value="nacional">Evento Nacional</option>
-            <option value="internacional">Evento Internacional</option>
-        </select>
-    </div>
-                                        </div>
-
-
-
-                        <div class="form-group col-md-5">
-                            <label for="producto">Ponencia</label>
-                            <input type="text" id="producto" name="producto" class="form-control">
-                        </div></div>
-                      <div class="form-row">
-        <div class="form-group col-md-5">
-            <label for="nombre_evento">Nombre del Evento:</label>
-            <input type="text" id="nombre_evento" name="nombre_evento" class="form-control" required>
-        </div>
-
-
-
-        <div class="form-group col-md-2">
-            <label for="fecha_evento">Fecha del Evento:</label>
-            <input type="date" id="fecha_evento" name="fecha_evento" class="form-control" required>
-        </div>
-
-        <div class="form-group col-md-2">
-            <label for="lugar_evento">Lugar del Evento:</label>
-            <input type="text" id="lugar_evento" name="lugar_evento" class="form-control" required>
-        </div>
-    </div>
-
-
-
-                    <!-- Fila 5: Autores - Evaluación 1 - Evaluación 2 - Puntaje -->
-                      <div class="form-row">
-                        <div class="form-group col-md-3">
-                            <label for="autores">Autores</label>
-                            <input type="number" id="autores" name="autores" class="form-control" min="1" placeholder="Cantidad de autores">
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label for="evaluacion1">Evaluación 1</label>
-                            <input type="number" id="evaluacion1" name="evaluacion1" class="form-control" step="0.01" min="0" placeholder="0.00">
-                        </div>
-
-                        <div class="form-group col-md-3">
-                            <label for="evaluacion2">Evaluación 2</label>
-                            <input type="number" id="evaluacion2" name="evaluacion2" class="form-control" step="0.01" min="0" placeholder="0.00">
-                        </div>
-                             <div class="form-group col-md-3">
-            <label for="puntaje_f">Puntaje Final</label>
-            <input type="text" id="puntaje_f" name="puntaje_f" class="form-control">
-        </div>
-
-
-                    </div>                  <div class="form-row">
-
-                    <div class="form-group col-md-12">
-                            <label for="puntaje">Puntaje</label>
-                            <input type="text" id="puntaje" name="puntaje" class="form-control" readonly>
-                        </div></div>
-                                    <div class="mt-3">
-                        <button type="button" class="btn btn-secondary" onclick="window.history.back();">Cerrar</button>
-                        <button type="submit" class="btn btn-primary">Guardar</button>
-                    </div>
-                </form>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bonificación - Ponencias | CIARP</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        body { background-color: #f4f7f6; color: #4a4a4a; }
+        .card-custom {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            background-color: #ffffff;
+            padding: 30px;
+            margin: 30px 0;
+        }
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #2c3e50;
+            border-bottom: 2px solid #eef2f7;
+            padding-bottom: 10px;
+            margin: 20px 0;
+        }
+        #contenedor_documentos {
+            background-color: #f8fafd;
+            border-radius: 10px;
+            border-left: 5px solid #10b981; /* Verde Bonificación */
+            transition: all 0.3s ease;
+        }
+        .form-control:focus, .custom-select:focus {
+            border-color: #10b981;
+            box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.1);
+        }
+        label { font-size: 0.85rem; margin-bottom: 0.4rem; font-weight: 600; }
+        .puntaje-destacado {
+            font-weight: 800;
+            color: #10b981;
+            border-color: #10b981 !important;
+            background-color: #f0fdf4 !important;
+            font-size: 1.1rem;
+        }
+        .badge-bono {
+            background-color: #10b981;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card-custom">
+            <div class="text-center mb-2">
+                <span class="badge-bono"><i class="fas fa-chalkboard-teacher mr-1"></i> Módulo de Bonificación</span>
             </div>
+            <h2 class="mb-4 text-center" style="font-weight: 800; color: #1a2a3a;">Ponencias</h2>
+
+            <form action="guardar_ponencias_bon.php" method="post">
+                <?php $identificador_base = date('Y_m'); ?>
+
+                <div class="section-title">Información de Solicitud</div>
+                <div class="form-row align-items-end">
+                    <div class="form-group col-md-3">
+                        <label>Identificador:</label>
+                        <div class="input-group shadow-sm">
+                            <input type="text" class="form-control" name="identificador_base" value="<?= $identificador_base ?>" maxlength="7" pattern="\d{4}_\d{2}" required>
+                            <div class="input-group-append">
+                                <select class="custom-select" name="numero_envio" style="max-width: 60px;">
+                                    <?php for ($i = 1; $i <= 9; $i++) echo "<option value='$i'>$i</option>"; ?>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="text-success"># Profesores Solicitantes:</label>
+                        <input type="number" id="numero_profesores" name="numero_profesores" min="1" class="form-control border-success shadow-sm" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label>Número de Oficio:</label>
+                        <input type="text" id="numeroOficio" name="numeroOficio" class="form-control shadow-sm" placeholder="Oficio TRD" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label>Fecha Solicitud:</label>
+                        <input type="date" name="fecha_solicitud" class="form-control shadow-sm" value="<?= date('Y-m-d') ?>">
+                    </div>
+                </div>
+
+                <div id="contenedor_documentos" class="mb-4"></div>
+
+                <div class="section-title">Detalles de la Ponencia</div>
+                <div class="form-row">
+                    <div class="form-group col-md-4">
+                        <label>Grado de Difusión Geográfico:</label>
+                        <select name="difusion" id="difusion" class="custom-select shadow-sm" required>
+                            <option value="" disabled selected>Seleccione...</option>
+                            <option value="regional">Evento Regional (Max 24 pts)</option>
+                            <option value="nacional">Evento Nacional (Max 48 pts)</option>
+                            <option value="internacional">Evento Internacional (Max 84 pts)</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-8">
+                        <label>Título de la Ponencia:</label>
+                        <input type="text" class="form-control shadow-sm" name="producto" placeholder="Nombre completo de la ponencia" required>
+                    </div>
+                </div>
+                <div class="form-row mb-3">
+                    <div class="form-group col-md-6">
+                        <label>Nombre del Evento:</label>
+                        <input type="text" class="form-control shadow-sm" name="nombre_evento" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label>Lugar:</label>
+                        <input type="text" class="form-control shadow-sm" name="lugar_evento" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label>Fecha del Evento:</label>
+                        <input type="date" class="form-control shadow-sm" name="fecha_evento" required>
+                    </div>
+                </div>
+
+                <div class="section-title">Evaluación y Cálculo de Bonificación</div>
+                <div class="form-row align-items-end">
+                    <div class="form-group col-md-2">
+                        <label>Autores:</label>
+                        <input type="number" id="autores" name="autores" class="form-control shadow-sm" min="1" value="1">
+                    </div>
+                    <div class="form-group col-md-2">
+                        <label>Evaluación 1:</label>
+                        <input type="number" id="evaluacion1" name="evaluacion1" class="form-control shadow-sm" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group col-md-2">
+                        <label>Evaluación 2:</label>
+                        <input type="number" id="evaluacion2" name="evaluacion2" class="form-control shadow-sm" step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label class="text-success font-weight-bold">Puntaje Final:</label>
+                        <input type="text" id="puntaje_f" name="puntaje_f" class="form-control puntaje-destacado text-center shadow-sm" readonly>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="small text-muted">Memoria de cálculo (Basado en Artículo 9):</label>
+                    <input type="text" id="puntaje" class="form-control form-control-sm bg-light shadow-none" readonly>
+                </div>
+
+                <hr class="mt-4">
+                <div class="d-flex justify-content-end align-items-center">
+                    <button type="button" class="btn btn-link text-muted mr-3" onclick="window.history.back();">Cancelar</button>
+                    <button type="submit" class="btn btn-success px-5 shadow-sm fw-bold">
+                        <i class="fas fa-save mr-2"></i>Guardar Bonificación
+                    </button>
+                </div>
+            </form>
         </div>
+    </div>
 
-        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-
-        <!-- Script para calcular el promedio -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script>
-        // Obtener referencias a los elementos de entrada
+        // --- LÓGICA DE CÁLCULO ---
         const autoresInput = document.getElementById('autores');
-        const evaluacion1Input = document.getElementById('evaluacion1');
-        const evaluacion2Input = document.getElementById('evaluacion2');
-        const difusionSelect = document.getElementById('difusion');
-        const puntajeInput = document.getElementById('puntaje');
-        const puntajeFInput = document.getElementById('puntaje_f');
+        const eval1Input = document.getElementById('evaluacion1');
+        const eval2Input = document.getElementById('evaluacion2');
+        const difSelect = document.getElementById('difusion');
+        const puntajeMemo = document.getElementById('puntaje');
+        const puntajeFinal = document.getElementById('puntaje_f');
 
-        // Función para redondear hacia abajo a dos decimales
-        function redondearHaciaAbajo(valor) {
-            return Math.floor(valor * 100) / 100;
+        function getPorcentaje(promedio) {
+            if (promedio >= 95) return { p: 1.0, t: "Excelente (100%)" };
+            if (promedio >= 90) return { p: 0.9, t: "Sobresaliente (90%)" };
+            if (promedio >= 80) return { p: 0.8, t: "Bueno (80%)" };
+            if (promedio >= 70) return { p: 0.7, t: "Aceptable (70%)" };
+            return { p: 0, t: "No bonifica (<70)" };
         }
-    // Función para calcular el puntaje
 
-    // Función para calcular el puntaje
-    // Función para calcular el puntaje
         function calcularPuntaje() {
-            const autores = parseInt(autoresInput.value);
-            const eval1 = parseFloat(evaluacion1Input.value);
-            const eval2 = parseFloat(evaluacion2Input.value);
-            const difusion = difusionSelect.value.trim().toLowerCase();
+            const autores = parseInt(autoresInput.value) || 1;
+            const e1 = parseFloat(eval1Input.value) || 0;
+            const e2 = parseFloat(eval2Input.value) || 0;
+            const dif = difSelect.value;
 
-            if (!isNaN(eval1) && !isNaN(eval2) && !isNaN(autores) && autores > 0) {
-                const suma = eval1 + eval2;
-                // 1. Usamos el promedio numérico para la lógica
-                const promedioNum = suma / 2;
-                // 2. Guardamos el promedio con 2 decimales solo para mostrarlo
-                const promedioDisplay = promedioNum.toFixed(2);
+            if (e1 > 0 && e2 > 0 && dif) {
+                const promedio = (e1 + e2) / 2;
+                const { p: factorBono, t: rangoLabel } = getPorcentaje(promedio);
+                
+                let maxP = (dif === 'internacional') ? 84 : (dif === 'nacional') ? 48 : 24;
+                const puntajeBase = factorBono * maxP;
+                
+                let final;
+                let detalleAutores = "";
 
-                // 3. *** LÓGICA CORREGIDA SEGÚN ARTÍCULO 9 ***
-                // Determinar el porcentaje de bonificación según el RANGO
-                let porcentajeBonificacion = 0;
-                let rangoTexto = "Inferior a 70 (No bonifica)";
+                if (autores <= 3) { final = puntajeBase; detalleAutores = "(100% puntaje)"; }
+                else if (autores <= 5) { final = puntajeBase / 2; detalleAutores = "(50% puntaje)"; }
+                else { final = puntajeBase / (autores / 2); detalleAutores = `(Dividido por ${autores/2})`; }
 
-                if (promedioNum >= 95) {
-                    porcentajeBonificacion = 1.0; // 100% para Excelente (95-100)
-                    rangoTexto = "Excelente (95-100) -> 100%";
-                } else if (promedioNum >= 90) {
-                    porcentajeBonificacion = 0.9; // 90% para Sobresaliente (90-94.99)
-                    rangoTexto = "Sobresaliente (90-94) -> 90%";
-                } else if (promedioNum >= 80) {
-                    porcentajeBonificacion = 0.8; // 80% para Bueno (80-89.99)
-                    rangoTexto = "Bueno (80-89) -> 80%";
-                } else if (promedioNum >= 70) {
-                    porcentajeBonificacion = 0.7; // 70% para Aceptable (70-79.99)
-                    rangoTexto = "Aceptable (70-79) -> 70%";
-                }
-                // Si es menor a 70, porcentajeBonificacion permanece en 0.
-
-                let maxPuntaje = 0;
-                if (difusion === 'internacional') {
-                    maxPuntaje = 84;
-                } else if (difusion === 'nacional') {
-                    maxPuntaje = 48;
-                } else if (difusion === 'regional') {
-                    maxPuntaje = 24;
-                }
-
-                if (maxPuntaje > 0 && porcentajeBonificacion > 0) {
-                    // 4. *** CÁLCULO CORREGIDO ***
-                    // Usamos el porcentajeBonificacion (0.8) en lugar del promedio (0.8621)
-                    const puntajeBase = porcentajeBonificacion * maxPuntaje;
-                    
-                    let puntajeFinal;
-                    let detalleAutores = '';
-
-                    if (autores <= 3) {
-                        puntajeFinal = puntajeBase;
-                        detalleAutores = '(Hasta 3 autores: puntaje total)';
-                    } else if (autores >= 4 && autores <= 5) {
-                        puntajeFinal = puntajeBase / 2;
-                        detalleAutores = '(4 a 5 autores: mitad del puntaje)';
-                    } else {
-                        puntajeFinal = puntajeBase / (autores / 2);
-                        detalleAutores = `(6 o más autores: dividido por ${autores / 2})`;
-                    }
-
-                    const puntajeRedondeado = redondearHaciaAbajo(puntajeFinal).toFixed(2);
-
-                    // 5. Mostramos el cálculo correcto al usuario
-                    puntajeInput.value = `Promedio: ${promedioDisplay}. Rango: ${rangoTexto}. Cálculo: ${maxPuntaje} * ${porcentajeBonificacion * 100}% = ${puntajeBase.toFixed(2)} ${detalleAutores}`;
-                    puntajeFInput.value = puntajeRedondeado;
-
-                } else if (maxPuntaje === 0) {
-                    puntajeInput.value = 'Grado de difusión no válido';
-                    puntajeFInput.value = '';
-                } else { // (Si el porcentaje es 0, o sea, promedio < 70)
-                    puntajeInput.value = `Promedio: ${promedioDisplay}. ${rangoTexto}`;
-                    puntajeFInput.value = '0.00';
-                }
+                puntajeMemo.value = `Promedio: ${promedio.toFixed(2)} [${rangoLabel}] -> ${maxP} * ${factorBono * 100}% = ${puntajeBase.toFixed(2)} pts ${detalleAutores}`;
+                puntajeFinal.value = (Math.floor(final * 100) / 100).toFixed(2);
             } else {
-                puntajeInput.value = '';
-                puntajeFInput.value = '';
+                puntajeMemo.value = '';
+                puntajeFinal.value = '';
             }
         }
-   // Añadir eventos para calcular el puntaje cuando cambian los valores
-        autoresInput.addEventListener('input', calcularPuntaje);
-        evaluacion1Input.addEventListener('input', calcularPuntaje);
-        evaluacion2Input.addEventListener('input', calcularPuntaje);
-        difusionSelect.addEventListener('change', calcularPuntaje);
 
-        // Esto estaba duplicado en tu código, lo limpié pero no afecta la funcionalidad.
-        /* document.querySelectorAll('input[name="difusion"]').forEach((element) => {
-            element.addEventListener('change', calcularPuntaje);
-        });
-        */
-    </script>
+        [autoresInput, eval1Input, eval2Input, difSelect].forEach(el => el.addEventListener('input', calcularPuntaje));
 
+        // --- GESTIÓN DE PROFESORES ---
+        const numProfInput = document.getElementById('numero_profesores');
+        const contDocs = document.getElementById('contenedor_documentos');
+        const ofiInput = document.getElementById('numeroOficio');
 
-
-        <!-- Script para generar campos de documentos de profesores -->
-
-        <!-- Script para generar campos de documentos de profesores -->
-        <script>
-           const numeroProfesoresInput = document.getElementById('numero_profesores');
-        const contenedorDocumentos = document.getElementById('contenedor_documentos');
-
-        numeroProfesoresInput.addEventListener('input', () => {
-            contenedorDocumentos.innerHTML = ''; // Limpiar el contenedor cada vez que se cambie el número
-
-            const cantidad = parseInt(numeroProfesoresInput.value);
-            if (isNaN(cantidad) || cantidad < 1) return; // Validación de cantidad
-
-            for (let i = 1; i <= cantidad; i++) {
-                // Crear el contenedor del campo de documento y datos
-                const fieldContainer = document.createElement('div');
-                fieldContainer.classList.add('form-group', 'd-flex', 'align-items-center');
-
-                // Etiqueta para el campo de documento
-                const label = document.createElement('label');
-                label.textContent = `Cédula ${i}`;
-                label.setAttribute('for', `cedulaProfesor${i}`);
-                label.classList.add('mr-2'); // Añadir margen a la derecha para espacio
-
-                // Campo de entrada de documento
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.id = `cedulaProfesor${i}`;
-                input.name = `cedulaProfesor${i}`;
-                input.classList.add('form-control', 'mr-2', 'w-25'); // Agrega la clase 'w-25' para reducir el ancho
-                input.placeholder = `Ingrese cédula del profesor ${i}`;
-
-                // Contenedor para mostrar los datos del profesor
-                const datosContainer = document.createElement('div');
-                datosContainer.id = `datos_${i}`;
-                datosContainer.classList.add('text-muted'); // Estilo de texto
-
-                // Añadir evento para buscar los datos cuando se introduce el documento
-                input.addEventListener('input', () => buscarDatos(input, i));
-
-                // Añadir los elementos al contenedor
-                fieldContainer.appendChild(label);
-                fieldContainer.appendChild(input);
-                fieldContainer.appendChild(datosContainer);
-                contenedorDocumentos.appendChild(fieldContainer);
+        numProfInput.addEventListener('input', () => {
+            contDocs.innerHTML = '';
+            const cant = parseInt(numProfInput.value);
+            if (isNaN(cant) || cant < 1) { contDocs.style.padding = "0"; return; }
+            contDocs.style.padding = "20px";
+            for (let i = 1; i <= cant; i++) {
+                const div = document.createElement('div');
+                div.className = 'form-row align-items-center mb-3';
+                div.innerHTML = `
+                    <div class="col-md-3"><label class="small font-weight-bold">Cédula Profesor ${i}:</label>
+                    <input type="text" id="doc_${i}" name="cedulaProfesor${i}" class="form-control form-control-sm shadow-sm" required></div>
+                    <div class="col-md-9"><label class="small text-muted">Datos del Profesor:</label>
+                    <div id="datos_${i}" class="alert alert-light border m-0 p-1 small shadow-sm" style="min-height:31px; display:flex; align-items:center;">
+                        <i class="fas fa-user mr-2 opacity-50"></i> Esperando identificación...
+                    </div></div>`;
+                contDocs.appendChild(div);
+                document.getElementById(`doc_${i}`).addEventListener('blur', function() { buscarDocente(this, i); });
             }
         });
-        // Función para buscar datos
-        function buscarDatos(input, index) {
-            const documento = input.value.trim();
-            if (documento === '') return;
 
-            console.log(`Buscando datos para el documento: ${documento}`);
-            const datosContainer = document.getElementById(`datos_${index}`);
-            datosContainer.textContent = 'Cargando...'; // Mostrar indicador de carga
-
-            fetch(`obtener_datos_profesor.php?documento=${documento}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Error en la respuesta del servidor: ${response.status}`);
+        function buscarDocente(input, idx) {
+            if (!input.value.trim()) return;
+            const res = document.getElementById(`datos_${idx}`);
+            res.innerHTML = '<i class="fas fa-spinner fa-spin mr-2 text-success"></i>Buscando...';
+            fetch(`obtener_datos_profesor.php?documento=${input.value}`)
+                .then(r => r.json()).then(data => {
+                    if (data.error) res.innerHTML = `<span class="text-danger"><i class="fas fa-times-circle mr-1"></i>${data.error}</span>`;
+                    else {
+                        res.innerHTML = `<i class="fas fa-check-circle text-success mr-2"></i><strong>${data.nombre_completo}</strong> | ${data.nombre_depto}`;
+                        if (idx === 1 && data.numero_oficio) ofiInput.value = data.numero_oficio;
                     }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Datos recibidos:', data); // Mostrar datos en consola para depuración
-                    if (data.error) {
-                        datosContainer.textContent = data.error;
-                    } else {
-                        datosContainer.textContent = `${data.nombre_completo}, Depto: ${data.nombre_depto}, Fac.: ${data.nombre_fac}`;
-
-                        // Prellenar el campo "oficio" si es el primer profesor (index === 1)
-                        if (index === 1 && data.numero_oficio) {
-                            const numeroOficioInput = document.getElementById('numeroOficio');
-                            numeroOficioInput.value = data.numero_oficio;
-                            console.log(`Número de oficio prellenado: ${data.numero_oficio}`);
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error en la solicitud fetch:', error);
-                    datosContainer.textContent = 'Error al cargar los datos';
-                });
+                }).catch(() => res.innerHTML = '<span class="text-danger">Error de conexión</span>');
         }
     </script>
-    </body>
-    </html>
+</body>
+</html>

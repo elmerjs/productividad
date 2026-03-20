@@ -6,10 +6,12 @@ include_once('conn.php');
 $identificador = isset($_POST['identificador']) ? $_POST['identificador'] : null;
 $numero_oficio = isset($_POST['numero_oficio']) ? $_POST['numero_oficio'] : null;
 
-// Crear la consulta SQL con los filtros opcionales
+// Crear la consulta SQL a prueba de fallos usando LEFT JOIN y MAX()
 $sql = "
-SELECT f.nombre_fac_min as FACULTAD, d.depto_nom_propio as DEPARTAMENTO,
+SELECT 
     t.id_titulo AS id,
+    MAX(f.nombre_fac_min) AS `FACULTAD`, 
+    MAX(d.depto_nom_propio) AS `DEPARTAMENTO`,
     t.identificador,
     t.numero_oficio,
     t.titulo_obtenido,
@@ -20,24 +22,24 @@ SELECT f.nombre_fac_min as FACULTAD, d.depto_nom_propio as DEPARTAMENTO,
     t.resolucion_convalidacion,
     t.puntaje,
     t.tipo_productividad,
-    
-    -- Obtener los nombres de los profesores relacionados con el título
+    t.estado_titulo AS estado,
     GROUP_CONCAT(
         DISTINCT CONCAT(ter.nombre_completo, ' - ', ter.documento_tercero)
         ORDER BY ter.nombre_completo
-        SEPARATOR ', '
+        SEPARATOR '\n'
     ) AS profesores
 FROM 
     titulos t
-JOIN 
+LEFT JOIN 
     titulo_profesor tp ON tp.id_titulo = t.id_titulo
-JOIN 
+LEFT JOIN 
     tercero ter ON tp.fk_tercero = ter.documento_tercero
-    join deparmanentos d  on d.PK_DEPTO = ter.fk_depto
-    join facultad f on f.PK_FAC = d.FK_FAC
+LEFT JOIN 
+    deparmanentos d ON d.PK_DEPTO = ter.fk_depto
+LEFT JOIN 
+    facultad f ON f.PK_FAC = d.FK_FAC
 WHERE 1 = 1";
 
-// Añadir condiciones según los filtros
 if (!empty($identificador)) {
     $sql .= " AND t.identificador = '" . $conn->real_escape_string($identificador) . "'";
 }
@@ -45,326 +47,281 @@ if (!empty($numero_oficio)) {
     $sql .= " AND t.numero_oficio = '" . $conn->real_escape_string($numero_oficio) . "'";
 }
 
-// Agrupar los resultados por el ID del título
 $sql .= " GROUP BY t.id_titulo ORDER BY t.id_titulo DESC";
-
-// Ejecutar la consulta
 $result = $conn->query($sql);
 
-// --- EXTRACCIÓN DE IDENTIFICADORES Y AÑOS PARA EL MODAL ---
-$identificadores_result = $conn->query("SELECT DISTINCT identificador FROM titulos ORDER BY identificador DESC");
+// Extracción de identificadores y años
+$identificadores_result = $conn->query("SELECT DISTINCT identificador FROM titulos WHERE identificador IS NOT NULL ORDER BY identificador DESC");
 $identificadores = [];
 $unique_years = [];
 
-while ($row = $identificadores_result->fetch_assoc()) {
-    $identificadores[] = $row;
-    
-    // Extraer los primeros 4 dígitos para tener la lista de años
-    $year = substr($row['identificador'], 0, 4);
-    if (!empty($year) && is_numeric($year) && !in_array($year, $unique_years)) {
-        $unique_years[] = $year;
+if ($identificadores_result) {
+    while ($row = $identificadores_result->fetch_assoc()) {
+        $id_str = $row['identificador'];
+        $identificadores[] = $id_str;
+        $year = substr($id_str, 0, 4);
+        if (!empty($year) && is_numeric($year) && !in_array($year, $unique_years)) {
+            $unique_years[] = $year;
+        }
+    }
+    rsort($unique_years);
+}
+
+// Últimos lotes
+$ultimos_lotes_result = $conn->query("SELECT DISTINCT identificador FROM titulos WHERE identificador IS NOT NULL AND identificador != '' ORDER BY identificador DESC LIMIT 6");
+$ultimos_lotes = [];
+if ($ultimos_lotes_result) {
+    while ($row = $ultimos_lotes_result->fetch_assoc()) {
+        $ultimos_lotes[] = $row['identificador'];
     }
 }
-rsort($unique_years); // Ordenar años de mayor a menor
 ?>
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Listado de Títulos</title>
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.12.1/css/jquery.dataTables.min.css">
-    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.html5.min.js"></script>
+<style>
+    /* PREFIJO: titulos_ */
+    .titulos-module-wrapper { background-color: transparent; padding: 0; color: #334155; }
+    .titulos-page-header { margin-bottom: 1.2rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.8rem; }
     
-    <style>
-        .modal {
-            display: none; 
-            position: fixed; 
-            z-index: 1050; 
-            left: 0; 
-            top: 0; 
-            width: 100%; 
-            height: 100%;
-            overflow: auto; 
-            background-color: rgba(0, 0, 0, 0.5); 
-            padding-top: 60px;
-        }
-        .modal-content {
-            background-color: #fefefe; 
-            margin: 2% auto; 
-            padding: 20px; 
-            border: 1px solid #888;
-            width: 80%; 
-            max-width: 600px;
-            border-radius: 8px;
-        }
-        .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; }
-        .close:hover, .close:focus { color: black; text-decoration: none; cursor: pointer; }
-    </style>
-</head>
-<body>
-<div class="container-fluid mt-4">
-    <h1>Listado de Títulos Obtenidos</h1>
+    #titulos_tabla_principal thead th {
+        background-color: #f8fafc; color: #475569; border-bottom: 2px solid #e2e8f0;
+        font-size: 0.7rem; font-weight: 700; padding: 6px 8px; text-transform: uppercase;
+    }
+    #titulos_tabla_principal tbody td {
+        vertical-align: middle; font-size: 0.78rem; color: #334155;
+        border-bottom: 1px solid #f1f5f9; padding: 3px 8px !important; line-height: 1.15; 
+    }
 
-    <div class="mb-3">
-        <button id="openModal" class="btn btn-primary">Generar XLS</button>
-        <button id="openModalCuadros" class="btn btn-secondary">Generar Cuadros</button>
-        <button id="openModalResolucionesTitulos" class="btn btn-info text-white">Generar Resoluciones</button>
+    .titulos-modal {
+        display: none; position: fixed; z-index: 1050; left: 0; top: 0;
+        width: 100%; height: 100%; background-color: rgba(15, 23, 42, 0.4); 
+        backdrop-filter: blur(6px); padding-top: 6vh;
+    }
+    .titulos-modal-content {
+        background-color: #ffffff; margin: auto; padding: 2rem;
+        width: 90%; max-width: 600px; border-radius: 20px; 
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
+</style>
+
+<div class="titulos-module-wrapper">
+    <div class="titulos-page-header d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <h1 class="page-title-inner" style="font-weight: 700; color: #0f172a; font-size: 1.4rem;">Títulos Obtenidos</h1>
+            <p class="page-subtitle-inner" style="color: #64748b; font-size: 0.85rem;">Listado maestro de formaciones de posgrado y reconocimientos</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button id="titulos_btn_xls" class="btn-modern btn-m-xls"><i class="fas fa-file-excel"></i> Exportar XLS</button>
+            <button id="titulos_btn_cuadros" class="btn-modern btn-m-cuadros"><i class="fas fa-table"></i> Generar Cuadros</button>
+            <button id="titulos_btn_resoluciones" class="btn-modern btn-m-res"><i class="fas fa-file-signature"></i> Resoluciones</button>
+        </div>
     </div>
 
-    <table id="titulos" class="table-striped table-bordered">
-        <thead>
-            <tr> 
-                <th>ID</th>                
-                <th>IDENTIFICADOR</th>
-                <th>DEPARTAMENTO</th>
-                <th>OFICIO</th>
-                <th>PROFESOR(ES)</th>
-                <th>TÍTULO OBTENIDO</th>
-                <th>TIPO DE ESTUDIO</th>
-                <th>INSTITUCIÓN</th>
-                <th>PUNTAJE</th>
-                <th>CONVALIDACIÓN</th>
-                <th>ACCIONES</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php
-            while ($row = $result->fetch_assoc()) {
-                $facultad = $row['FACULTAD'];
-                $facultadTruncada = strlen($facultad) > 20 ? substr($facultad, 0, 20) . '...' : $facultad;
+    <div class="table-responsive">
+        <table id="titulos_tabla_principal" class="table table-hover align-middle" style="width:100%">
+            <thead>
+                <tr> 
+                    <th class="text-center">ID</th>                
+                    <th>IDENTIF.</th>
+                    <th>DEPARTAMENTO</th>
+                    <th>OFICIO</th>
+                    <th>PROFESORES</th>
+                    <th>TÍTULO OBTENIDO</th>
+                    <th>TIPO EST.</th>
+                    <th>INSTITUCIÓN</th>
+                    <th class="text-center">PTS</th>
+                    <th>ESTADO</th>
+                    <th class="text-center">ACCIONES</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php
+                while ($row = $result->fetch_assoc()) {
+                    $estadoOriginal = strtolower(trim($row['estado'] ?? ''));
+                    $estadoTexto = strtoupper($estadoOriginal ?: 'SIN ESTADO');
+                    
+                    if ($estadoOriginal === 'an' || strpos($estadoOriginal, 'anulado') !== false) {
+                        $htmlEstado = '<span class="status-pill status-anulado"><span class="status-dot bg-secondary"></span>ANULADO</span>';
+                    } else {
+                        $dotColor = 'bg-secondary'; 
+                        if ($estadoOriginal === 'ac' || strpos($estadoOriginal, 'aprobado') !== false) $dotColor = 'bg-success';
+                        elseif (strpos($estadoOriginal, 're') !== false) $dotColor = 'bg-danger';
+                        elseif (strpos($estadoOriginal, 'pe') !== false) $dotColor = 'bg-warning';
+                        $htmlEstado = '<span class="status-pill"><span class="status-dot ' . $dotColor . '"></span>' . $estadoTexto . '</span>';
+                    }
 
-                echo '<tr>';
-                echo '<td>' . htmlspecialchars($row['id']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['identificador']) . '</td>';
-                
-                echo '<td class="facultad-truncate" title="' 
-                    . htmlspecialchars($row['DEPARTAMENTO']) . ' - ' . htmlspecialchars($facultad) . '">'
-                    . htmlspecialchars(substr($row['DEPARTAMENTO'], 0, 20)) . ' - ' . $facultadTruncada 
-                    . '</td>';
+                    echo '<tr>';
+                    echo '<td class="text-center fw-bold text-primary">' . $row['id'] . '</td>';
+                    echo '<td><span class="badge bg-light text-secondary border px-1">' . htmlspecialchars($row['identificador']) . '</span></td>';
+                    echo '<td><div class="text-truncate-custom fw-medium text-dark" style="max-width: 120px;">' . htmlspecialchars($row['DEPARTAMENTO'] ?? 'N/A') . '</div></td>';
+                    echo '<td><small class="text-secondary">' . htmlspecialchars($row['numero_oficio']) . '</small></td>';
+                    echo '<td><div class="text-truncate-custom" style="max-width: 130px;" title="' . htmlspecialchars($row['profesores']) . '">' . htmlspecialchars(substr($row['profesores'], 0, 25)) . '...</div></td>';
+                    echo '<td><div class="text-truncate-custom" style="max-width: 160px;">' . htmlspecialchars($row['titulo_obtenido']) . '</div></td>';
+                    echo '<td><span class="badge bg-light text-secondary border px-1">' . htmlspecialchars($row['tipo_estudio']) . '</span></td>';
+                    echo '<td><div class="text-truncate-custom" style="max-width: 120px;">' . htmlspecialchars($row['institucion']) . '</div></td>';
+                    echo '<td class="text-center fw-bold text-success">' . htmlspecialchars($row['puntaje']) . '</td>';
+                    echo '<td>' . $htmlEstado . '</td>';
+                    echo '<td class="text-center text-nowrap">';
+                    echo '<a href="editar_titulos.php?id=' . $row['id'] . '" class="btn btn-light border btn-action text-primary shadow-sm"><i class="fas fa-pen"></i></a> ';
+                    echo '<button class="btn btn-light border btn-action text-danger shadow-sm" onclick="titulos_confirmDelete(' . $row['id'] . ')"><i class="fas fa-trash-alt"></i></button>';
+                    echo '</td>';
+                    echo '</tr>';
+                }
+                ?>
+            </tbody>
+        </table>
+    </div>
 
-                echo '<td>' . htmlspecialchars($row['numero_oficio']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['profesores']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['titulo_obtenido']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['tipo_estudio']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['institucion']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['puntaje']) . '</td>';
-                echo '<td>' . htmlspecialchars($row['resolucion_convalidacion']) . '</td>';
-                
-                echo '<td>';
-                echo '<a href="editar_titulos.php?id=' . $row['id'] . '" class="btn btn-warning btn-sm">Editar</a> ';
-                echo '<button class="delete-btn btn btn-danger btn-sm" data-id="' . $row['id'] . '">Eliminar</button>';
-                echo '</td>';
-                echo '</tr>';
-            }
-            ?>
-        </tbody>
-    </table>
+    <div class="quick-audit-section">
+        <div class="quick-audit-title"><i class="fas fa-folder-tree text-secondary me-1"></i> Auditoría de Lotes (Títulos)</div>
+        <div class="lotes-carousel">
+            <?php foreach($ultimos_lotes as $lote): ?>
+                <a href="auditoria_lote.php?lote=<?= urlencode($lote) ?>" class="lote-card"><i class="fas fa-graduation-cap text-success"></i> <?= htmlspecialchars($lote) ?></a>
+            <?php endforeach; ?>
+        </div>
+    </div>
 </div>
 
-<div id="modal" class="modal">
-    <div class="modal-content">
-        <span class="close close-xls">&times;</span>
-        <h2>Filtrar por Solicitud o Año</h2>
+<div id="titulos_modalXls" class="titulos-modal">
+    <div class="titulos-modal-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+             <h4 class="fw-bold text-success m-0"><i class="fas fa-file-excel me-2"></i>Reporte XLS Títulos</h4>
+             <span class="close titulos_closeModalXls">&times;</span>
+        </div>
         <form action="report_titulos.php" method="GET">
-            <label for="identificador_solicitud">Identificador de Solicitud:</label>
-            <select name="identificador_solicitud" id="identificador_solicitud" class="form-control">
-                <option value="">Selecciona un identificador</option>
-                <?php
-                foreach ($identificadores as $row_ident) {
-                    echo '<option value="' . htmlspecialchars($row_ident['identificador']) . '">' . htmlspecialchars($row_ident['identificador']) . '</option>';
-                }
-                ?>
-            </select>
-            <br><br>
-            <label for="ano">Año:</label>
-            <input type="number" name="ano" id="ano" class="form-control">
-            <br><br>
-            <input type="submit" value="Generar Reporte" class="btn btn-primary">
+            <div class="mb-3">
+                <label class="form-label text-secondary fw-semibold">Año:</label>
+                <select name="ano" id="titulos_ano_xls" class="form-select">
+                    <option value="">Todos...</option>
+                    <?php foreach($unique_years as $y) echo "<option value='$y'>$y</option>"; ?>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="form-label text-secondary fw-semibold">Identificador:</label>
+                <select name="identificador_solicitud" id="titulos_id_xls" class="form-select">
+                    <option value="">Selecciona un paquete...</option>
+                    <?php foreach ($identificadores as $id) echo '<option value="'.htmlspecialchars($id).'" data-ano="'.substr($id,0,4).'">'.htmlspecialchars($id).'</option>'; ?>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-success w-100">Generar Reporte</button>
         </form>
     </div>
 </div>
 
-<div id="modalCuadros" class="modal">
-    <div class="modal-content">
-        <span class="close close-cuadros">&times;</span>
-        <h2>Filtrar para Generar Cuadros</h2>
+<div id="titulos_modalCuadros" class="titulos-modal">
+    <div class="titulos-modal-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+             <h4 class="fw-bold text-primary m-0"><i class="fas fa-table me-2"></i>Generar Cuadros</h4>
+             <span class="close titulos_closeModalCuadros">&times;</span>
+        </div>
         <form action="cuadros_titulos.php" method="GET">
-            <label for="cuadro_ano">Año:</label>
-            <select name="cuadro_ano" id="cuadro_ano" class="form-control mb-3">
-                <option value="">Selecciona un año</option>
-                <?php
-                foreach ($unique_years as $ano) {
-                    echo '<option value="' . htmlspecialchars($ano) . '">' . htmlspecialchars($ano) . '</option>';
-                }
-                ?>
-            </select>
-            <label for="cuadro_identificador_solicitud">Identificador de Solicitud:</label>
-            <select name="cuadro_identificador_solicitud" id="cuadro_identificador_solicitud" class="form-control">
-                <option value="">Selecciona un identificador</option>
-                <?php
-                foreach ($identificadores as $row_ident_cuadro) {
-                    echo '<option value="' . htmlspecialchars($row_ident_cuadro['identificador']) . '" data-ano="' . substr($row_ident_cuadro['identificador'], 0, 4) . '">'
-                        . htmlspecialchars($row_ident_cuadro['identificador']) . '</option>';
-                }
-                ?>
-            </select>
-            <br><br>
-            <input type="submit" value="Generar Cuadro" class="btn btn-secondary">
+            <div class="mb-3">
+                <label class="form-label text-secondary fw-semibold">Año:</label>
+                <select name="cuadro_ano" id="titulos_ano_cuadros" class="form-select">
+                    <option value="">Todos...</option>
+                    <?php foreach($unique_years as $y) echo "<option value='$y'>$y</option>"; ?>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="form-label text-secondary fw-semibold">Identificador:</label>
+                <select name="cuadro_identificador_solicitud" id="titulos_id_cuadros" class="form-select">
+                    <option value="">Selecciona...</option>
+                    <?php foreach ($identificadores as $id) echo '<option value="'.htmlspecialchars($id).'" data-ano="'.substr($id,0,4).'">'.htmlspecialchars($id).'</option>'; ?>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Generar Cuadro</button>
         </form>
     </div>
 </div>
 
-<div id="modalResolucionesTitulos" class="modal">
-    <div class="modal-content" style="max-width: 700px;">
-        <span class="close close-resoluciones-titulos">&times;</span>
-        <h2 class="mb-4">Generar Resoluciones de Títulos (Word)</h2>
+<div id="titulos_modalResoluciones" class="titulos-modal">
+    <div class="titulos-modal-content" style="max-width: 650px;">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+             <h4 class="fw-bold text-info m-0" style="color: #0284c7 !important;"><i class="fas fa-file-word me-2"></i>Resoluciones Títulos</h4>
+             <span class="close titulos_closeModalResoluciones">&times;</span>
+        </div>
         <form action="resoluciones_titulos.php" method="GET">
-            
-            <div class="row bg-light p-3 mb-3 border rounded">
+            <div class="row bg-light p-3 mb-4 border rounded-3 mx-0">
                 <div class="col-md-6 mb-2">
-                    <label for="filtro_ano_res" class="fw-bold">Año del Paquete:</label>
-                    <select name="res_ano" id="filtro_ano_res" class="form-control">
+                    <label class="form-label text-secondary fw-semibold">Año del Paquete:</label>
+                    <select id="titulos_filtro_ano_res" class="form-select">
                         <option value="todos">Todos los años</option>
-                        <?php
-                        foreach ($unique_years as $ano_val) {
-                            echo '<option value="' . htmlspecialchars($ano_val) . '">' . htmlspecialchars($ano_val) . '</option>';
-                        }
-                        ?>
+                        <?php foreach ($unique_years as $y) echo '<option value="'.$y.'">'.$y.'</option>'; ?>
                     </select>
                 </div>
                 <div class="col-md-6 mb-2">
-                    <label for="res_identificador_titulos" class="fw-bold">Identificador de Solicitud:</label>
-                    <select name="cuadro_identificador_titulo" id="res_identificador_titulos" class="form-control" required>
-                        <option value="">Selecciona un identificador</option>
-                        <?php
-                        foreach ($identificadores as $row_ident_res) {
-                            echo '<option value="' . htmlspecialchars($row_ident_res['identificador']) . '" data-ano="' . substr($row_ident_res['identificador'], 0, 4) . '">'
-                                . htmlspecialchars($row_ident_res['identificador']) . '</option>';
-                        }
-                        ?>
+                    <label class="form-label text-secondary fw-semibold">Identificador:</label>
+                    <select name="cuadro_identificador_titulo" id="titulos_id_res" class="form-select" required>
+                        <option value="">Selecciona...</option>
+                        <?php foreach ($identificadores as $id) echo '<option value="'.htmlspecialchars($id).'" data-ano="'.substr($id,0,4).'">'.htmlspecialchars($id).'</option>'; ?>
                     </select>
                 </div>
             </div>
-
-            <h5 class="mb-3 text-primary">Datos de la Resolución (Opcionales)</h5>
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="num_resolucion">Número de resolución:</label>
-                    <input type="text" name="num_resolucion" id="num_resolucion" class="form-control" placeholder="Ej: 045">
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label for="fecha_resolucion">Fecha de la resolución:</label>
-                    <input type="date" name="fecha_resolucion" id="fecha_resolucion" class="form-control">
-                </div>
+            <div class="row px-2">
+                <div class="col-md-6 mb-3"><label class="form-label text-muted">Num. Resolución:</label><input type="text" name="num_resolucion" class="form-control" placeholder="Ej: 045"></div>
+                <div class="col-md-6 mb-3"><label class="form-label text-muted">Fecha:</label><input type="date" name="fecha_resolucion" class="form-control"></div>
             </div>
-
-            <div class="row">
-                <div class="col-md-8 mb-3">
-                    <label for="nombre_vicerrector">Firma (Vicerrector/a):</label>
-                    <input type="text" name="nombre_vicerrector" id="nombre_vicerrector" class="form-control" value="AIDA PATRICIA GONZÁLEZ NIEVA" required>
-                </div>
-                <div class="col-md-4 mb-3">
-                    <label for="genero_vicerrector">Género:</label>
-                    <select name="genero_vicerrector" id="genero_vicerrector" class="form-control" required>
-                        <option value="F">Femenino</option>
-                        <option value="M">Masculino</option>
-                    </select>
-                </div>
+            <div class="row px-2">
+                <div class="col-md-8 mb-3"><label class="form-label text-muted">Firma:</label><input type="text" name="nombre_vicerrector" class="form-control" value="AIDA PATRICIA GONZÁLEZ NIEVA" required></div>
+                <div class="col-md-4 mb-3"><label class="form-label text-muted">Género:</label><select name="genero_vicerrector" class="form-select"><option value="F">Femenino</option><option value="M">Masculino</option></select></div>
             </div>
-
-            <div class="row">
-                <div class="col-md-6 mb-4">
-                    <label for="nombre_reviso">Revisó:</label>
-                    <input type="text" name="nombre_reviso" id="nombre_reviso" class="form-control" value="Marjhory Castro" required>
-                </div>
-                <div class="col-md-6 mb-4">
-                    <label for="nombre_elaboro">Elaboró:</label>
-                    <input type="text" name="nombre_elaboro" id="nombre_elaboro" class="form-control" value="Elizete Rivera" required>
-                </div>
+            <div class="row px-2">
+                <div class="col-md-6 mb-4"><label class="form-label text-muted">Revisó:</label><input type="text" name="nombre_reviso" class="form-control" value="Marjhory Castro" required></div>
+                <div class="col-md-6 mb-4"><label class="form-label text-muted">Elaboró:</label><input type="text" name="nombre_elaboro" class="form-control" value="Elizete Rivera" required></div>
             </div>
-
-            <input type="submit" value="Generar Resoluciones Word" class="btn btn-info text-white w-100 fs-5">
+            <div class="d-grid mt-2"><button type="submit" class="btn btn-info text-white">Generar Word</button></div>
         </form>
     </div>
 </div>
 
 <script>
-    $(document).ready(function() {
-        $('#titulos').DataTable({
-            responsive: true,
-            dom: 'Bfrtip',
-            buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
-            language: { url: 'https://cdn.datatables.net/plug-ins/1.12.1/i18n/Spanish.json' }
-        });
+(function() {
+    function initTitulos() {
+        $(function() {
+            // Control de apertura
+            $('#titulos_btn_xls').on('click', function() { $('#titulos_modalXls').fadeIn(200); });
+            $('#titulos_btn_cuadros').on('click', function() { $('#titulos_modalCuadros').fadeIn(200); });
+            $('#titulos_btn_resoluciones').on('click', function() { $('#titulos_modalResoluciones').fadeIn(200); });
 
-        $("#openModal").click(function() { $("#modal").css("display", "block"); });
-        $("#openModalCuadros").click(function() { $("#modalCuadros").css("display", "block"); });
-        $('#openModalResolucionesTitulos').click(function() { $('#modalResolucionesTitulos').show(); });
+            // Control de cierre
+            $('.titulos_closeModalXls').on('click', function() { $('#titulos_modalXls').fadeOut(200); });
+            $('.titulos_closeModalCuadros').on('click', function() { $('#titulos_modalCuadros').fadeOut(200); });
+            $('.titulos_closeModalResoluciones').on('click', function() { $('#titulos_modalResoluciones').fadeOut(200); });
 
-        $(".close-xls").click(function() { $("#modal").css("display", "none"); });
-        $(".close-cuadros").click(function() { $("#modalCuadros").css("display", "none"); });
-        $('.close-resoluciones-titulos').click(function() { $('#modalResolucionesTitulos').hide(); });
+            // Cerrar al click afuera
+            $(window).on('click', function(e) { if ($(e.target).hasClass('titulos-modal')) $('.titulos-modal').fadeOut(200); });
 
-        $(window).click(function(event) {
-            if ($(event.target).is(".modal")) {
-                $(".modal").css("display", "none");
+            // Filtrado de años
+            function applyYearFilter(yearId, targetId) {
+                const year = $('#' + yearId).val();
+                $('#' + targetId + ' option').each(function() {
+                    const optYear = $(this).data('ano');
+                    if (year === "todos" || year === "" || !optYear || optYear == year) $(this).show();
+                    else $(this).hide();
+                });
+                $('#' + targetId).val("");
             }
-        });
 
-        // Filtrado por año (Resoluciones)
-        $('#filtro_ano_res').on('change', function() {
-            var anoSeleccionado = $(this).val();
-            $('#res_identificador_titulos').val(""); 
-            
-            $('#res_identificador_titulos option').each(function() {
-                var optionAno = $(this).data('ano');
-                if (anoSeleccionado === "todos" || $(this).val() === "") {
-                    $(this).show();
-                } else {
-                    if (optionAno == anoSeleccionado) {
-                        $(this).show();
-                    } else {
-                        $(this).hide();
-                    }
-                }
-            });
-        });
-        
-        // Filtrado por año (Cuadros)
-        $('#cuadro_ano').on('change', function() {
-            var anoSeleccionado = $(this).val();
-            $('#cuadro_identificador_solicitud').val(""); 
-            
-            $('#cuadro_identificador_solicitud option').each(function() {
-                var optionAno = $(this).data('ano');
-                if (anoSeleccionado === "" || $(this).val() === "") {
-                    $(this).show();
-                } else {
-                    if (optionAno == anoSeleccionado) {
-                        $(this).show();
-                    } else {
-                        $(this).hide();
-                    }
-                }
-            });
-        });
+            $('#titulos_ano_xls').on('change', function() { applyYearFilter('titulos_ano_xls', 'titulos_id_xls'); });
+            $('#titulos_ano_cuadros').on('change', function() { applyYearFilter('titulos_ano_cuadros', 'titulos_id_cuadros'); });
+            $('#titulos_filtro_ano_res').on('change', function() { applyYearFilter('titulos_filtro_ano_res', 'titulos_id_res'); });
 
-        $(".delete-btn").click(function() {
-            var id = $(this).data("id");
-            if (confirm('¿Estás seguro de eliminar la solicitud con ID ' + id + '?')) {
-                alert('Aquí va tu código para eliminar la solicitud ' + id);
-            }
+            // Acción de eliminar
+            window.titulos_confirmDelete = function(id) {
+                if (confirm("¿Seguro que desea eliminar este título?")) {
+                    const motivo = prompt("Motivo de anulación:");
+                    if (motivo && motivo.trim() !== "") {
+                        window.location.href = 'eliminar_titulo.php?id_solicitud=' + id + '&motivo=' + encodeURIComponent(motivo);
+                    } else if (motivo !== null) alert("Motivo obligatorio.");
+                }
+            };
         });
-    });
+    }
+
+    if (window.jQuery) initTitulos();
+    else {
+        const checkJQ = setInterval(function() {
+            if (window.jQuery) { clearInterval(checkJQ); initTitulos(); }
+        }, 20);
+    }
+})();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>

@@ -1,84 +1,99 @@
 <?php
-// Incluye tu archivo de conexión existente
+// Incluir archivo de conexión
 include 'conn.php';
 
-// Obtén los datos del formulario
-$numero_profesores = $_POST['numero_profesores'];
-$identificador_base = $_POST['identificador_base'];
-$numero_envio = $_POST['numero_envio'];
-$identificador_completo = $identificador_base . '_' . $numero_envio;
-$numeroOficio = $_POST['numeroOficio'];
-$fecha_solicitud = $_POST['fecha_solicitud'];
-$tipo_producto = $_POST['tipo_producto'];
-$impacto = $_POST['impacto'];
-$producto = $_POST['producto'];
-$nombre_evento = $_POST['nombre_evento'];
-$evento = $_POST['evento'];
-$fecha_evento = $_POST['fecha_evento'];
-$fecha_evento_f = $_POST['fecha_evento_f'];
-$lugar_evento = $_POST['lugar_evento'];
-$autores = $_POST['autores'];
-$evaluacion1 = $_POST['evaluacion1'];
-$evaluacion2 = $_POST['evaluacion2'];
-$puntaje = $_POST['puntaje']; // Este es el campo de texto
-$puntaje_final = $_POST['puntaje_f']; // Calculado y almacenado en la base de datos
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // 1. Identificación y Profesores
+    $numero_profesores      = intval($_POST['numero_profesores'] ?? 0);
+    $identificador_base     = $_POST['identificador_base'] ?? '';
+    $numero_envio           = $_POST['numero_envio'] ?? '';
+    $identificador_completo = $identificador_base . '_' . $numero_envio;
+    
+    // 2. Datos de la Obra y Evento
+    $numeroOficio     = $_POST['numeroOficio'] ?? '';
+    $fecha_solicitud  = $_POST['fecha_solicitud'] ?? '';
+    $tipo_producto    = $_POST['tipo_producto'] ?? '';
+    $impacto          = $_POST['impacto'] ?? '';
+    $producto         = $_POST['producto'] ?? '';
+    $nombre_evento    = $_POST['nombre_evento'] ?? '';
+    $evento           = $_POST['evento'] ?? '';
+    $fecha_evento     = $_POST['fecha_evento'] ?? NULL;
+    $fecha_evento_f   = $_POST['fecha_evento_f'] ?? NULL; // Nueva fecha fin
+    $lugar_evento     = $_POST['lugar_evento'] ?? '';
+    
+    // 3. Evaluación y Puntaje
+    $autores        = $_POST['autores'] ?? 0;
+    $evaluacion1    = $_POST['evaluacion1'] ?? NULL;
+    $evaluacion2    = $_POST['evaluacion2'] ?? NULL;
+    $evaluacion3    = !empty($_POST['evaluacion3']) ? $_POST['evaluacion3'] : NULL; // Nuevo Evaluador 3
+    $puntaje_detalle = $_POST['puntaje'] ?? ''; // Texto del cálculo
+    $puntaje_final   = $_POST['puntaje_f'] ?? 0; // Valor numérico
     $tipo_productividad = "puntos";
 
-// Inicia una transacción para asegurar que todos los datos se guarden correctamente
-$conn->begin_transaction();
+    // Iniciar transacción para seguridad de datos
+    $conn->begin_transaction();
 
-try {
-    // Inserta los datos en la tabla `creacion`
-    $sql_creacion = "INSERT INTO creacion (
-                        identificador_completo, numeroOficio, fecha_solicitud, tipo_producto, 
-                        impacto, producto, nombre_evento, evento, fecha_evento,fecha_evento_f, lugar_evento, 
-                        autores, evaluacion1, evaluacion2, puntaje, puntaje_final, tipo_productividad
-                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    try {
+        // SQL con 18 parámetros (incluyendo evaluacion3 y fecha_evento_f)
+        $sql = "INSERT INTO creacion (
+                    identificador_completo, numeroOficio, fecha_solicitud, tipo_producto, 
+                    impacto, producto, nombre_evento, evento, fecha_evento, fecha_evento_f, 
+                    lugar_evento, autores, evaluacion1, evaluacion2, evaluacion3, 
+                    puntaje, puntaje_final, tipo_productividad
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-    $stmt = $conn->prepare($sql_creacion);
-    $stmt->bind_param(
-        "ssssssssssssidsss",
-        $identificador_completo, $numeroOficio, $fecha_solicitud, $tipo_producto, 
-        $impacto, $producto, $nombre_evento, $evento, $fecha_evento, $fecha_evento_f, $lugar_evento, 
-        $autores, $evaluacion1, $evaluacion2, $puntaje, $puntaje_final,$tipo_productividad
-    );
+        $stmt = $conn->prepare($sql);
+        
+        // s = string, i = integer, d = double/decimal
+        $stmt->bind_param(
+            "sssssssssssidsssss", 
+            $identificador_completo, $numeroOficio, $fecha_solicitud, $tipo_producto, 
+            $impacto, $producto, $nombre_evento, $evento, $fecha_evento, $fecha_evento_f, 
+            $lugar_evento, $autores, $evaluacion1, $evaluacion2, $evaluacion3, 
+            $puntaje_detalle, $puntaje_final, $tipo_productividad
+        );
 
-    if (!$stmt->execute()) {
-        throw new Exception("Error al guardar en `creacion`: " . $stmt->error);
-    }
-
-    // Obtén el ID insertado para usarlo en `creacion_profesor`
-    $id_creacion = $conn->insert_id;
-
-    // Inserta los datos de los profesores en `creacion_profesor`
-    for ($i = 1; $i <= $numero_profesores; $i++) {
-        // Supongamos que hay campos específicos para cada profesor
-        $documento_profesor = $_POST["cedulaProfesor$i"];
-
-        $sql_creacion_profesor = "INSERT INTO creacion_profesor (id_creacion, documento_profesor) 
-                                  VALUES (?, ?)";
-        $stmt_profesor = $conn->prepare($sql_creacion_profesor);
-        $stmt_profesor->bind_param("is", $id_creacion, $documento_profesor);
-
-        if (!$stmt_profesor->execute()) {
-            throw new Exception("Error al guardar en `creacion_profesor`: " . $stmt_profesor->error);
+        if (!$stmt->execute()) {
+            throw new Exception("Error al insertar obra: " . $stmt->error);
         }
+
+        $id_creacion = $conn->insert_id;
+
+        // 4. Inserción de Profesores Solicitantes
+        if ($numero_profesores > 0) {
+            $sql_prof = "INSERT INTO creacion_profesor (id_creacion, documento_profesor) VALUES (?, ?)";
+            $stmt_prof = $conn->prepare($sql_prof);
+
+            for ($i = 1; $i <= $numero_profesores; $i++) {
+                $cedula = $_POST["cedulaProfesor$i"] ?? '';
+                if (!empty($cedula)) {
+                    $stmt_prof->bind_param("is", $id_creacion, $cedula);
+                    $stmt_prof_res = $stmt_prof->execute();
+                    if (!$stmt_prof_res) {
+                        throw new Exception("Error en profesor $i: " . $stmt_prof->error);
+                    }
+                }
+            }
+            $stmt_prof->close();
+        }
+
+        // Confirmar todo si no hubo errores
+        $conn->commit();
+        
+        // Redirección exitosa profesional
+        $conn->close();
+        header("Location: index.php?status=success");
+        exit();
+
+    } catch (Exception $e) {
+        // Revertir cambios si algo falló
+        $conn->rollback();
+        $error_msg = urlencode($e->getMessage());
+        header("Location: index.php?status=error&msg=$error_msg");
+        exit();
     }
-
-    // Si todo fue exitoso, confirma la transacción
-    $conn->commit();
-    echo "Datos guardados correctamente.";
-} catch (Exception $e) {
-    // Si hubo un error, revierte la transacción
-    $conn->rollback();
-    echo "Error: " . $e->getMessage();
+} else {
+    header("Location: index.php");
+    exit();
 }
-        echo '<br><a href="menu_ini.php">Volver al menú</a>';
-
-// Cierra las declaraciones y la conexión
-$stmt->close();
-if (isset($stmt_profesor)) {
-    $stmt_profesor->close();
-}
-$conn->close();
 ?>
